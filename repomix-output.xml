@@ -1,0 +1,5320 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+backend/.env
+backend/.env.example
+backend/api/__init__.py
+backend/api/auth.py
+backend/api/github.py
+backend/config.py
+backend/database.py
+backend/Dockerfile
+backend/main.py
+backend/memory/__init__.py
+backend/memory/long_term.py
+backend/memory/short_term.py
+backend/models/__init__.py
+backend/models/db.py
+backend/models/events.py
+backend/models/schemas.py
+backend/requirements.txt
+backend/services/__init__.py
+backend/services/auth_service.py
+backend/services/github_service.py
+backend/tests/test_memory.py
+backend/tools/__init__.py
+backend/tools/github_oauth.py
+backend/tools/github_tool.py
+backend/tools/github_user_api.py
+backend/tools/security_tool.py
+backend/tools/test_runner.py
+docker-compose.yml
+frontend/.env.example
+frontend/.gitignore
+frontend/.vite/deps/_metadata.json
+frontend/.vite/deps/package.json
+frontend/index.html
+frontend/metadata.json
+frontend/package.json
+frontend/README.md
+frontend/src/App.tsx
+frontend/src/components/auth/ProtectedRoute.tsx
+frontend/src/components/layout/AppShell.tsx
+frontend/src/components/layout/Sidebar.tsx
+frontend/src/components/shared/AgentChip.tsx
+frontend/src/components/shared/StatusBadge.tsx
+frontend/src/components/tasks/TaskCreateModal.tsx
+frontend/src/index.css
+frontend/src/lib/utils.ts
+frontend/src/main.tsx
+frontend/src/mockData.ts
+frontend/src/pages/Activity.tsx
+frontend/src/pages/AgentLog.tsx
+frontend/src/pages/Auth.tsx
+frontend/src/pages/Dashboard.tsx
+frontend/src/pages/ErrorPage.tsx
+frontend/src/pages/Inbox.tsx
+frontend/src/pages/Login.tsx
+frontend/src/pages/MemoryExplorer.tsx
+frontend/src/pages/TaskDetail.tsx
+frontend/src/router.tsx
+frontend/src/store/authStore.ts
+frontend/src/store/githubStore.ts
+frontend/src/types/agent.ts
+frontend/src/types/task.ts
+frontend/src/vite-env.d.ts
+frontend/tsconfig.json
+frontend/vite.config.ts
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="backend/.env">
+FRONTEND_URL=http://localhost:3000
+BACKEND_URL=http://localhost:8000
+GITHUB_CLIENT_ID=Ov23liuxENNRE6zgiUoV
+GITHUB_CLIENT_SECRET=08cb5a41990ae60f5b6dcc177ca2ae1f459faf67
+GITHUB_REDIRECT_URI=http://localhost:3000/auth/callback
+GITHUB_OAUTH_TOKEN_URL=https://github.com/login/oauth/access_token
+GITHUB_API_BASE=https://api.github.com
+
+POSTGRES_USER=conductor
+POSTGRES_PASSWORD=conductor_dev
+POSTGRES_DB=conductor
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+
+REDIS_HOST=localhost
+REDIS_PORT=6379
+
+QDRANT_HOST=localhost
+QDRANT_PORT=6333
+QDRANT_COLLECTION=conductor-memory
+
+OLLAMA_HOST=localhost
+OLLAMA_PORT=11434
+
+CELERY_BROKER_URL=redis://localhost:6379/0
+CELERY_RESULT_BACKEND=redis://localhost:6379/0
+</file>
+
+<file path="backend/.env.example">
+# === EXISTING - OAuth (keep these) ===
+FRONTEND_URL=http://localhost:3000
+BACKEND_URL=http://localhost:8000
+
+GITHUB_CLIENT_ID=your_github_oauth_client_id_here
+GITHUB_CLIENT_SECRET=your_github_oauth_client_secret_here
+GITHUB_REDIRECT_URI=http://localhost:3000/auth/callback
+GITHUB_OAUTH_TOKEN_URL=https://github.com/login/oauth/access_token
+GITHUB_API_BASE=https://api.github.com
+
+# === NEW - Infrastructure ===
+# PostgreSQL
+POSTGRES_USER=conductor
+POSTGRES_PASSWORD=conductor_dev
+POSTGRES_DB=conductor
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+
+# Redis
+REDIS_HOST=localhost
+REDIS_PORT=6379
+
+# Qdrant
+QDRANT_HOST=localhost
+QDRANT_PORT=6333
+QDRANT_COLLECTION=conductor-memory
+
+# Ollama
+OLLAMA_HOST=localhost
+OLLAMA_PORT=11434
+
+# Celery
+CELERY_BROKER_URL=redis://localhost:6379/0
+CELERY_RESULT_BACKEND=redis://localhost:6379/0
+</file>
+
+<file path="backend/api/__init__.py">
+from api.auth import router as auth_router
+from api.github import router as github_router
+
+__all__ = ["auth_router", "github_router"]
+</file>
+
+<file path="backend/api/auth.py">
+from fastapi import APIRouter, Header
+
+from models.schemas import OAuthCodeRequest, OAuthTokenResponse, VerifyResponse
+from services.auth_service import exchange_code, extract_bearer_token, verify_token
+
+
+router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+
+@router.post("/github/callback", response_model=OAuthTokenResponse)
+async def github_callback(payload: OAuthCodeRequest) -> OAuthTokenResponse:
+    access_token, user = await exchange_code(payload.code)
+    return OAuthTokenResponse(access_token=access_token, user=user)
+
+
+@router.get("/verify", response_model=VerifyResponse)
+async def verify_auth(authorization: str | None = Header(default=None)) -> VerifyResponse:
+    token = extract_bearer_token(authorization)
+    user = await verify_token(token)
+    return VerifyResponse(user=user)
+</file>
+
+<file path="backend/api/github.py">
+from fastapi import APIRouter, Header, Path
+
+from models.schemas import GitHubBranch, GitHubRepository
+from services.auth_service import extract_bearer_token
+from services.github_service import get_branches, get_repositories
+
+
+router = APIRouter(prefix="/github", tags=["GitHub"])
+
+
+@router.get("/repositories", response_model=list[GitHubRepository])
+async def repositories(authorization: str | None = Header(default=None)) -> list[GitHubRepository]:
+    token = extract_bearer_token(authorization)
+    return await get_repositories(token)
+
+
+@router.get("/repositories/{repo_full_name:path}/branches", response_model=list[GitHubBranch])
+async def branches(
+    repo_full_name: str = Path(...),
+    authorization: str | None = Header(default=None),
+) -> list[GitHubBranch]:
+    token = extract_bearer_token(authorization)
+    return await get_branches(token, repo_full_name)
+</file>
+
+<file path="backend/config.py">
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    # App URLs
+    FRONTEND_URL: str = "http://localhost:3000"
+    BACKEND_URL: str = "http://localhost:8000"
+
+    # GitHub OAuth App credentials (NEVER expose client_secret to frontend)
+    GITHUB_CLIENT_ID: str
+    GITHUB_CLIENT_SECRET: str
+
+    # Must exactly match the redirect_uri your GitHub OAuth App is configured with.
+    # Frontend uses: `${window.location.origin}/auth/callback`
+    GITHUB_REDIRECT_URI: str = "http://localhost:3000/auth/callback"
+    GITHUB_OAUTH_TOKEN_URL: str = "https://github.com/login/oauth/access_token"
+    GITHUB_API_BASE: str = "https://api.github.com"
+
+    # Database
+    POSTGRES_USER: str = "conductor"
+    POSTGRES_PASSWORD: str = "conductor_dev"
+    POSTGRES_DB: str = "conductor"
+    POSTGRES_HOST: str = "localhost"
+    POSTGRES_PORT: int = 5432
+
+    @property
+    def POSTGRES_URL(self) -> str:
+        return (
+            "postgresql+asyncpg://"
+            f"{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
+            f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        )
+
+    # Redis
+    REDIS_HOST: str = "localhost"
+    REDIS_PORT: int = 6379
+
+    @property
+    def REDIS_URL(self) -> str:
+        return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}"
+
+    # Qdrant
+    QDRANT_HOST: str = "localhost"
+    QDRANT_PORT: int = 6333
+    QDRANT_COLLECTION: str = "conductor-memory"
+
+    @property
+    def QDRANT_URL(self) -> str:
+        return f"http://{self.QDRANT_HOST}:{self.QDRANT_PORT}"
+
+    # Ollama
+    OLLAMA_HOST: str = "localhost"
+    OLLAMA_PORT: int = 11434
+
+    @property
+    def OLLAMA_BASE_URL(self) -> str:
+        return f"http://{self.OLLAMA_HOST}:{self.OLLAMA_PORT}"
+
+    # Celery
+    CELERY_BROKER_URL: str = "redis://localhost:6379/0"
+    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+
+settings = Settings()
+</file>
+
+<file path="backend/database.py">
+import logging
+
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import declarative_base
+
+from config import settings
+
+
+logger = logging.getLogger(__name__)
+
+# Create async engine
+engine = create_async_engine(
+    settings.POSTGRES_URL,
+    echo=True,
+    pool_pre_ping=True,
+    pool_size=10,
+    max_overflow=20,
+)
+
+# Session factory
+async_session_maker = async_sessionmaker(
+    engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+    autoflush=False,
+)
+
+# Base class for models
+Base = declarative_base()
+
+
+async def get_db() -> AsyncSession:
+    """
+    FastAPI dependency for database sessions.
+
+    Usage:
+        @router.get("/tasks")
+        async def get_tasks(db: AsyncSession = Depends(get_db)):
+            ...
+    """
+    async with async_session_maker() as session:
+        try:
+            yield session
+        finally:
+            await session.close()
+
+
+async def init_db():
+    """Initialize database - create all tables"""
+    async with engine.begin() as conn:
+        logger.info("Creating database tables...")
+        await conn.run_sync(Base.metadata.create_all)
+        logger.info("Database tables created successfully")
+
+
+async def drop_db():
+    """Drop all tables - USE WITH CAUTION"""
+    async with engine.begin() as conn:
+        logger.warning("Dropping all database tables...")
+        await conn.run_sync(Base.metadata.drop_all)
+        logger.warning("All tables dropped")
+</file>
+
+<file path="backend/Dockerfile">
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY . .
+
+# Default command (override in docker-compose.yml)
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+</file>
+
+<file path="backend/main.py">
+from contextlib import asynccontextmanager
+import logging
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from api import auth_router, github_router
+from config import settings
+from database import init_db
+from memory.long_term import ensure_collection
+
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Initializing database...")
+    await init_db()
+    logger.info("Database initialized")
+    logger.info("Ensuring Qdrant collection exists...")
+    await ensure_collection()
+    logger.info("Qdrant collection ready")
+    yield
+    logger.info("Application shutdown")
+
+
+app = FastAPI(
+    title="Conductor API",
+    version="0.2.0",
+    description="AI-driven software company backend",
+    lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[settings.FRONTEND_URL],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(auth_router)
+app.include_router(github_router)
+
+
+@app.get("/health", tags=["System"])
+async def health():
+    return {
+        "status": "ok",
+        "version": "0.2.0",
+        "module": "1A - Infrastructure",
+    }
+</file>
+
+<file path="backend/memory/__init__.py">
+from memory.short_term import (
+    get_redis,
+    save_state,
+    get_state,
+    delete_state,
+    publish_event,
+    subscribe_events,
+)
+from memory.long_term import (
+    get_qdrant,
+    ensure_collection,
+    embed,
+    store_memory,
+    retrieve_memory,
+    delete_memory,
+)
+
+__all__ = [
+    # Short-term (Redis)
+    "get_redis",
+    "save_state",
+    "get_state",
+    "delete_state",
+    "publish_event",
+    "subscribe_events",
+    # Long-term (Qdrant)
+    "get_qdrant",
+    "ensure_collection",
+    "embed",
+    "store_memory",
+    "retrieve_memory",
+    "delete_memory",
+]
+</file>
+
+<file path="backend/memory/long_term.py">
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
+from uuid import uuid4
+
+from qdrant_client import QdrantClient
+from qdrant_client.http import models as qdrant_models
+from sentence_transformers import SentenceTransformer
+
+from config import settings
+from models.schemas import MemoryCreate, MemoryEntry
+
+
+EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
+EMBEDDING_DIMENSION = 384
+
+_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="memory")
+_qdrant_client: QdrantClient | None = None
+_embedder: SentenceTransformer | None = None
+
+
+def get_qdrant() -> QdrantClient:
+    global _qdrant_client
+
+    if _qdrant_client is None:
+        _qdrant_client = QdrantClient(url=settings.QDRANT_URL)
+
+    return _qdrant_client
+
+
+def _get_embedder() -> SentenceTransformer:
+    global _embedder
+
+    if _embedder is None:
+        _embedder = SentenceTransformer(EMBEDDING_MODEL_NAME)
+
+    return _embedder
+
+
+def _ensure_collection_sync() -> None:
+    client = get_qdrant()
+    collections = client.get_collections().collections
+    exists = any(collection.name == settings.QDRANT_COLLECTION for collection in collections)
+
+    if exists:
+        return
+
+    client.create_collection(
+        collection_name=settings.QDRANT_COLLECTION,
+        vectors_config=qdrant_models.VectorParams(
+            size=EMBEDDING_DIMENSION,
+            distance=qdrant_models.Distance.COSINE,
+        ),
+    )
+
+
+async def ensure_collection() -> None:
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(_executor, _ensure_collection_sync)
+
+
+def embed(text: str) -> list[float]:
+    model = _get_embedder()
+    vector = model.encode(text, normalize_embeddings=True)
+    return vector.tolist()
+
+
+async def store_memory(memory: MemoryCreate | MemoryEntry) -> MemoryEntry:
+    loop = asyncio.get_running_loop()
+    await ensure_collection()
+    entry = _normalize_memory(memory)
+    vector = await loop.run_in_executor(_executor, embed, entry.content)
+    client = get_qdrant()
+
+    payload = entry.model_dump(by_alias=True)
+
+    await loop.run_in_executor(
+        _executor,
+        lambda: client.upsert(
+            collection_name=settings.QDRANT_COLLECTION,
+            points=[
+                qdrant_models.PointStruct(
+                    id=entry.id,
+                    vector=vector,
+                    payload=payload,
+                )
+            ],
+        ),
+    )
+
+    return entry
+
+
+async def retrieve_memory(query: str, limit: int = 5, top_k: int | None = None) -> list[MemoryEntry]:
+    loop = asyncio.get_running_loop()
+    await ensure_collection()
+    vector = await loop.run_in_executor(_executor, embed, query)
+    client = get_qdrant()
+    result_limit = top_k if top_k is not None else limit
+
+    results = await loop.run_in_executor(
+        _executor,
+        lambda: client.search(
+            collection_name=settings.QDRANT_COLLECTION,
+            query_vector=vector,
+            limit=result_limit,
+            with_payload=True,
+        ),
+    )
+
+    memories: list[MemoryEntry] = []
+    for result in results:
+        payload = result.payload or {}
+        payload["score"] = result.score
+        memories.append(MemoryEntry.model_validate(payload))
+
+    return memories
+
+
+async def delete_memory(memory_id: str) -> None:
+    loop = asyncio.get_running_loop()
+    client = get_qdrant()
+
+    await loop.run_in_executor(
+        _executor,
+        lambda: client.delete(
+            collection_name=settings.QDRANT_COLLECTION,
+            points_selector=qdrant_models.PointIdsList(points=[memory_id]),
+        ),
+    )
+
+
+def _normalize_memory(memory: MemoryCreate | MemoryEntry) -> MemoryEntry:
+    if isinstance(memory, MemoryEntry):
+        return memory
+
+    return MemoryEntry(
+        id=str(uuid4()),
+        content=memory.content,
+        tags=memory.tags,
+        sourceTaskId=memory.source_task_id,
+        date=datetime.utcnow(),
+        score=None,
+    )
+</file>
+
+<file path="backend/memory/short_term.py">
+import asyncio
+import json
+from collections.abc import AsyncGenerator
+
+import redis.asyncio as redis
+from pydantic import BaseModel
+
+from config import settings
+from models.events import AgentEvent, TaskStatusEvent
+from models.schemas import TaskState
+
+
+STATE_TTL_SECONDS = 7 * 24 * 60 * 60
+STATE_KEY_PREFIX = "task_state"
+EVENT_CHANNEL_PREFIX = "task_events"
+
+_redis_client: redis.Redis | None = None
+
+
+def _state_key(task_id: str) -> str:
+    return f"{STATE_KEY_PREFIX}:{task_id}"
+
+
+def _event_channel(task_id: str) -> str:
+    return f"{EVENT_CHANNEL_PREFIX}:{task_id}"
+
+
+async def get_redis() -> redis.Redis:
+    global _redis_client
+
+    if _redis_client is None:
+        _redis_client = redis.from_url(
+            settings.REDIS_URL,
+            encoding="utf-8",
+            decode_responses=True,
+        )
+
+    return _redis_client
+
+
+async def save_state(task_id: str | TaskState, state: TaskState | None = None) -> None:
+    if isinstance(task_id, TaskState):
+        state = task_id
+        task_id = state.id
+
+    if state is None:
+        raise ValueError("state is required")
+
+    client = await get_redis()
+    await client.set(
+        _state_key(task_id),
+        state.model_dump_json(by_alias=True),
+        ex=STATE_TTL_SECONDS,
+    )
+
+
+async def get_state(task_id: str) -> TaskState | None:
+    client = await get_redis()
+    payload = await client.get(_state_key(task_id))
+
+    if payload is None:
+        return None
+
+    return TaskState.model_validate_json(payload)
+
+
+async def delete_state(task_id: str) -> None:
+    client = await get_redis()
+    await client.delete(_state_key(task_id))
+
+
+async def publish_event(
+    task_id: str,
+    event: AgentEvent | TaskStatusEvent | BaseModel | dict | str,
+) -> None:
+    client = await get_redis()
+
+    if hasattr(event, "to_sse"):
+        payload = event.to_sse()
+    elif isinstance(event, BaseModel):
+        payload = event.model_dump_json(by_alias=True)
+    elif isinstance(event, dict):
+        payload = json.dumps(event)
+    else:
+        payload = str(event)
+
+    await client.publish(_event_channel(task_id), payload)
+
+
+async def subscribe_events(task_id: str) -> AsyncGenerator[str, None]:
+    client = await get_redis()
+    pubsub = client.pubsub()
+    channel = _event_channel(task_id)
+    await pubsub.subscribe(channel)
+
+    try:
+        while True:
+            message = await pubsub.get_message(
+                ignore_subscribe_messages=True,
+                timeout=1.0,
+            )
+
+            if message and message.get("type") == "message":
+                data = message.get("data")
+                if data is not None:
+                    yield str(data)
+                continue
+
+            await asyncio.sleep(0.1)
+    finally:
+        await pubsub.unsubscribe(channel)
+        await pubsub.aclose()
+</file>
+
+<file path="backend/models/__init__.py">
+from models.schemas import (
+    TaskStatus,
+    Priority,
+    Severity,
+    AgentRole,
+    TaskCreate,
+    FileChange,
+    DevOutput,
+    QAFailure,
+    QAResult,
+    CISOFinding,
+    CISOGate,
+    CriticOutput,
+    TaskState,
+    TaskResponse,
+    TaskListItem,
+    OverrideRequest,
+    MemoryEntry,
+    MemoryCreate,
+)
+from models.events import AgentEvent, TaskStatusEvent
+from models.db import Task, AgentCall, QAResultRow, EscalationRow, MemoryEntryRow
+
+__all__ = [
+    # Enums
+    "TaskStatus",
+    "Priority",
+    "Severity",
+    "AgentRole",
+    # Schemas
+    "TaskCreate",
+    "FileChange",
+    "DevOutput",
+    "QAFailure",
+    "QAResult",
+    "CISOFinding",
+    "CISOGate",
+    "CriticOutput",
+    "TaskState",
+    "TaskResponse",
+    "TaskListItem",
+    "OverrideRequest",
+    "MemoryEntry",
+    "MemoryCreate",
+    # Events
+    "AgentEvent",
+    "TaskStatusEvent",
+    # DB Models
+    "Task",
+    "AgentCall",
+    "QAResultRow",
+    "EscalationRow",
+    "MemoryEntryRow",
+]
+</file>
+
+<file path="backend/models/db.py">
+from datetime import datetime
+import uuid
+
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+)
+from sqlalchemy.sql import func
+
+from database import Base
+
+
+def generate_uuid() -> str:
+    return str(uuid.uuid4())
+
+
+class Task(Base):
+    __tablename__ = "tasks"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=False)
+    status = Column(String(50), nullable=False, default="pending")
+    priority = Column(String(20), nullable=False, default="Medium")
+    repo = Column(String(255), nullable=False)
+    branch = Column(String(255), nullable=False)
+    acceptance_criteria = Column(JSON, nullable=False, default=list)
+    context_refs = Column(JSON, nullable=False, default=list)
+    current_agent = Column(String(50), nullable=False, default="Orchestrator")
+    retry_count = Column(Integer, nullable=False, default=0)
+    max_retries = Column(Integer, nullable=False, default=5)
+    progress = Column(Integer, nullable=False, default=0)
+    pr_number = Column(Integer, nullable=True)
+    commit_hash = Column(String(100), nullable=True)
+    dev_output = Column(JSON, nullable=True)
+    qa_result = Column(JSON, nullable=True)
+    ciso_gate = Column(JSON, nullable=True)
+    critic_output = Column(JSON, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class AgentCall(Base):
+    __tablename__ = "agent_calls"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    task_id = Column(String, ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False, index=True)
+    agent_role = Column(String(50), nullable=False)
+    action = Column(String(100), nullable=False)
+    input_payload = Column(JSON, nullable=True)
+    output_payload = Column(JSON, nullable=True)
+    status = Column(String(50), nullable=False, default="completed")
+    tokens_used = Column(Integer, nullable=True)
+    latency_seconds = Column(Float, nullable=True)
+    cost_usd = Column(Float, nullable=True)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class QAResultRow(Base):
+    __tablename__ = "qa_results"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    task_id = Column(String, ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False, index=True)
+    attempt = Column(Integer, nullable=False, default=1)
+    status = Column(String(20), nullable=False)
+    unit_pass = Column(Integer, nullable=False, default=0)
+    unit_fail = Column(Integer, nullable=False, default=0)
+    integration_pass = Column(Integer, nullable=False, default=0)
+    integration_fail = Column(Integer, nullable=False, default=0)
+    coverage = Column(Float, nullable=True)
+    latency = Column(String(50), nullable=True)
+    failures = Column(JSON, nullable=False, default=list)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class EscalationRow(Base):
+    __tablename__ = "escalations"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    task_id = Column(String, ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False, index=True)
+    escalation_type = Column(String(50), nullable=False)
+    severity = Column(String(20), nullable=True)
+    reason = Column(Text, nullable=False)
+    recommendation = Column(Text, nullable=True)
+    findings = Column(Text, nullable=True)
+    resolved = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class MemoryEntryRow(Base):
+    __tablename__ = "memory_entries"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    content = Column(Text, nullable=False)
+    tags = Column(JSON, nullable=False, default=list)
+    source_task_id = Column(String, ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True, index=True)
+    score = Column(Float, nullable=True)
+    metadata_json = Column("metadata", JSON, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+</file>
+
+<file path="backend/models/events.py">
+import json
+from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from models.schemas import AgentRole, TaskStatus
+
+
+class AgentEvent(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    task_id: str = Field(alias="taskId")
+    agent: AgentRole
+    message: str
+    timestamp: datetime
+    event_type: str = Field(default="agent_event", alias="eventType")
+    payload: dict | None = None
+
+    def to_sse(self) -> str:
+        return (
+            f"event: {self.event_type}\n"
+            f"data: {json.dumps(self.model_dump(by_alias=True, mode='json'))}\n\n"
+        )
+
+
+class TaskStatusEvent(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    task_id: str = Field(alias="taskId")
+    status: TaskStatus
+    progress: int = 0
+    timestamp: datetime
+    event_type: str = Field(default="task_status", alias="eventType")
+    message: str | None = None
+
+    def to_sse(self) -> str:
+        return (
+            f"event: {self.event_type}\n"
+            f"data: {json.dumps(self.model_dump(by_alias=True, mode='json'))}\n\n"
+        )
+</file>
+
+<file path="backend/models/schemas.py">
+from datetime import datetime
+from enum import Enum
+
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+
+
+class TaskStatus(str, Enum):
+    pending = "pending"
+    PENDING = "pending"
+    running = "running"
+    RUNNING = "running"
+    retrying = "retrying"
+    RETRYING = "retrying"
+    blocked = "blocked"
+    BLOCKED = "blocked"
+    escalated = "escalated"
+    ESCALATED = "escalated"
+    deployed = "deployed"
+    DEPLOYED = "deployed"
+    failed = "failed"
+    FAILED = "failed"
+    completed = "completed"
+    COMPLETED = "completed"
+
+
+class Priority(str, Enum):
+    low = "Low"
+    LOW = "Low"
+    medium = "Medium"
+    MEDIUM = "Medium"
+    high = "High"
+    HIGH = "High"
+    critical = "Critical"
+    CRITICAL = "Critical"
+
+
+class Severity(str, Enum):
+    low = "low"
+    LOW = "low"
+    medium = "medium"
+    MEDIUM = "medium"
+    high = "high"
+    HIGH = "high"
+    critical = "critical"
+    CRITICAL = "critical"
+
+
+class AgentRole(str, Enum):
+    developer = "Developer"
+    DEVELOPER = "Developer"
+    qa = "QA"
+    QA = "QA"
+    ciso = "CISO"
+    CISO = "CISO"
+    critic = "Critic"
+    CRITIC = "Critic"
+    devops = "DevOps"
+    DEVOPS = "DevOps"
+    ceo_manager = "CEO/Manager"
+    CEO_MANAGER = "CEO/Manager"
+    orchestrator = "Orchestrator"
+    ORCHESTRATOR = "Orchestrator"
+
+
+class OAuthCodeRequest(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    code: str = Field(min_length=1, description="The OAuth code from GitHub redirect")
+
+
+class GitHubUser(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    login: str
+    name: str | None = None
+    avatar_url: str | None = None
+    email: str | None = None
+
+
+class OAuthTokenResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    access_token: str
+    user: GitHubUser
+
+
+class VerifyResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    user: GitHubUser
+
+
+class GitHubRepository(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    full_name: str
+    private: bool
+    default_branch: str
+    html_url: str
+
+
+class GitHubBranch(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    name: str
+    protected: bool
+
+
+class ErrorResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    detail: str
+
+
+class TaskCreate(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    title: str = Field(min_length=1)
+    description: str = Field(min_length=1)
+    repo: str = Field(min_length=1)
+    branch: str = Field(min_length=1)
+    priority: Priority = Priority.medium
+    acceptance_criteria: list[str] = Field(default_factory=list)
+    context_refs: list[str] = Field(default_factory=list)
+
+
+class FileChange(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    file_path: str
+    change_type: str
+    summary: str
+    patch: str | None = None
+
+
+class DevOutput(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    summary: str
+    branch: str | None = None
+    commit_hash: str | None = None
+    pr_number: int | None = None
+    files_changed: list[FileChange] = Field(default_factory=list)
+
+
+class QAFailure(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    name: str
+    error: str
+    severity: Severity
+    location: str
+
+
+class TestCounts(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    pass_count: int = Field(alias="pass", ge=0)
+    fail: int = Field(ge=0)
+
+
+class QAResult(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    attempt: int = Field(ge=1)
+    status: str
+    unit_tests: TestCounts = Field(alias="unitTests")
+    integration_tests: TestCounts = Field(alias="integrationTests")
+    coverage: float = Field(ge=0, le=100)
+    latency: str
+    failures: list[QAFailure] = Field(default_factory=list)
+
+
+class CISOFinding(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    title: str
+    severity: Severity
+    location: str
+    description: str
+    recommendation: str | None = None
+
+
+class CISOGate(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    status: str
+    summary: str
+    findings: list[CISOFinding] = Field(default_factory=list)
+    blocked: bool = False
+
+
+class CriticOutput(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    score: float = Field(ge=0, le=10)
+    summary: str
+    recommendation: str | None = None
+    approved: bool = False
+
+
+class TaskState(BaseModel):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    id: str = Field(validation_alias=AliasChoices("id", "task_id"), serialization_alias="id")
+    title: str
+    description: str
+    status: TaskStatus = TaskStatus.pending
+    priority: Priority = Priority.medium
+    repo: str
+    branch: str
+    acceptance_criteria: list[str] = Field(default_factory=list)
+    context_refs: list[str] = Field(default_factory=list)
+    current_agent: AgentRole = Field(
+        default=AgentRole.orchestrator,
+        alias="currentAgent",
+    )
+    retry_count: int = Field(default=0, alias="retryCount", ge=0)
+    max_retries: int = Field(default=5, alias="maxRetries", ge=0)
+    progress: int = Field(default=0, ge=0, le=100)
+    created_at: datetime = Field(default_factory=datetime.utcnow, alias="createdAt")
+    updated_at: datetime = Field(default_factory=datetime.utcnow, alias="updatedAt")
+    pr_number: int | None = Field(default=None, alias="prNumber")
+    commit_hash: str | None = Field(default=None, alias="commitHash")
+    dev_output: DevOutput | None = Field(default=None, alias="devOutput")
+    qa_result: QAResult | None = Field(default=None, alias="qaResult")
+    ciso_gate: CISOGate | None = Field(default=None, alias="cisoGate")
+    critic_output: CriticOutput | None = Field(default=None, alias="criticOutput")
+
+
+class TaskResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    task: TaskState
+
+
+class TaskListItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    title: str
+    status: TaskStatus
+    priority: Priority
+    repo: str
+    branch: str
+    current_agent: AgentRole = Field(alias="currentAgent")
+    progress: int = Field(ge=0, le=100)
+    created_at: datetime = Field(alias="createdAt")
+    updated_at: datetime = Field(alias="updatedAt")
+
+
+class OverrideRequest(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    action: str = Field(min_length=1)
+    reason: str = Field(min_length=1)
+    notes: str | None = None
+    requested_by: str = Field(alias="requestedBy")
+
+
+class MemoryEntry(BaseModel):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    id: str
+    content: str
+    tags: list[str] = Field(default_factory=list)
+    source_task_id: str = Field(
+        alias="sourceTaskId",
+        validation_alias=AliasChoices("sourceTaskId", "source_task_id"),
+    )
+    agent: AgentRole | str | None = None
+    date: datetime | str
+    score: float | None = None
+
+
+class MemoryCreate(BaseModel):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    content: str = Field(min_length=1)
+    tags: list[str] = Field(default_factory=list)
+    source_task_id: str = Field(
+        alias="sourceTaskId",
+        validation_alias=AliasChoices("sourceTaskId", "source_task_id"),
+    )
+</file>
+
+<file path="backend/requirements.txt">
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.5.3
+pydantic-settings>=2.1.0
+httpx>=0.27.0
+python-dotenv>=1.0.0
+sqlalchemy[asyncio]>=2.0.23
+asyncpg>=0.29.0
+alembic>=1.13.0
+celery[redis]>=5.3.4
+redis[hiredis]>=5.0.1
+qdrant-client>=1.7.0
+sentence-transformers>=2.2.2
+litellm>=1.17.0
+PyGithub>=2.1.1
+langgraph>=0.0.20
+</file>
+
+<file path="backend/services/__init__.py">
+from services.auth_service import exchange_code, verify_token, extract_bearer_token
+from services.github_service import get_repositories, get_branches
+
+__all__ = [
+    "exchange_code",
+    "verify_token",
+    "extract_bearer_token",
+    "get_repositories",
+    "get_branches",
+]
+</file>
+
+<file path="backend/services/auth_service.py">
+from fastapi import HTTPException, status
+
+from models.schemas import GitHubUser
+from tools.github_oauth import exchange_code_for_token, fetch_user
+
+
+def extract_bearer_token(authorization: str | None) -> str:
+    if authorization is None or not authorization.strip():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing Authorization header",
+        )
+
+    parts = authorization.split(" ", 1)
+
+    if parts[0].lower() != "bearer":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authorization must use Bearer scheme",
+        )
+
+    if len(parts) < 2 or not parts[1].strip():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing token in Authorization header",
+        )
+
+    return parts[1].strip()
+
+
+async def exchange_code(code: str) -> tuple[str, GitHubUser]:
+    if not code.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="GitHub OAuth code is required",
+        )
+
+    token = await exchange_code_for_token(code.strip())
+    user = await fetch_user(token)
+    return token, user
+
+
+async def verify_token(token: str) -> GitHubUser:
+    return await fetch_user(token)
+</file>
+
+<file path="backend/services/github_service.py">
+from models.schemas import GitHubBranch, GitHubRepository
+from tools.github_user_api import list_branches, list_repositories
+
+
+async def get_repositories(token: str) -> list[GitHubRepository]:
+    return await list_repositories(token)
+
+
+async def get_branches(token: str, repo_full_name: str) -> list[GitHubBranch]:
+    return await list_branches(token, repo_full_name)
+</file>
+
+<file path="backend/tests/test_memory.py">
+import pytest
+from datetime import datetime
+from uuid import uuid4
+
+from memory.long_term import delete_memory, ensure_collection, retrieve_memory, store_memory
+from memory.short_term import delete_state, get_state, save_state
+from models.schemas import MemoryEntry, Priority, TaskState, TaskStatus
+
+
+@pytest.mark.asyncio
+async def test_redis_state_storage():
+    """Test saving and retrieving task state from Redis"""
+    task_id = f"test-{uuid4()}"
+
+    state = TaskState(
+        task_id=task_id,
+        title="Test Task",
+        description="Test description",
+        repo="owner/repo",
+        branch="main",
+        priority=Priority.MEDIUM,
+        acceptance_criteria=["Test criteria"],
+        context_refs=[],
+        status=TaskStatus.PENDING,
+    )
+
+    await save_state(state)
+
+    retrieved = await get_state(task_id)
+    assert retrieved is not None
+    assert retrieved.id == task_id
+    assert retrieved.title == "Test Task"
+    assert retrieved.status == TaskStatus.PENDING
+
+    await delete_state(task_id)
+    deleted = await get_state(task_id)
+    assert deleted is None
+
+
+@pytest.mark.asyncio
+async def test_qdrant_vector_search():
+    """Test storing and searching memories in Qdrant"""
+    await ensure_collection()
+
+    entry = MemoryEntry(
+        id=str(uuid4()),
+        content="IsolationForest requires n_samples >= 2 for training",
+        source_task_id="test-task-1",
+        agent="Developer",
+        date=datetime.utcnow(),
+        tags=["python", "ml", "debugging"],
+    )
+
+    await store_memory(entry)
+
+    results = await retrieve_memory("error with isolation forest one sample", top_k=1)
+
+    assert len(results) > 0
+    assert results[0].content == entry.content
+    assert results[0].score is not None
+    assert results[0].score > 0.5
+
+    await delete_memory(entry.id)
+</file>
+
+<file path="backend/tools/__init__.py">
+# Existing OAuth tools (from Module 0)
+from tools.github_oauth import exchange_code_for_token, fetch_user
+from tools.github_user_api import list_repositories, list_branches
+
+# NEW - Agent tools
+from tools.github_tool import GitHubTool
+from tools.test_runner import TestRunner
+from tools.security_tool import SecurityTool
+
+__all__ = [
+    # OAuth (existing)
+    "exchange_code_for_token",
+    "fetch_user",
+    "list_repositories",
+    "list_branches",
+    # Agent tools (new)
+    "GitHubTool",
+    "TestRunner",
+    "SecurityTool",
+]
+</file>
+
+<file path="backend/tools/github_oauth.py">
+import httpx
+from fastapi import HTTPException, status
+
+from config import settings
+from models.schemas import GitHubUser
+
+
+TIMEOUT = httpx.Timeout(connect=5.0, read=15.0, write=10.0, pool=5.0)
+
+
+async def exchange_code_for_token(code: str) -> str:
+    payload = {
+        "client_id": settings.GITHUB_CLIENT_ID,
+        "client_secret": settings.GITHUB_CLIENT_SECRET,
+        "code": code,
+        "redirect_uri": settings.GITHUB_REDIRECT_URI,
+    }
+    headers = {
+        "Accept": "application/json",
+        "User-Agent": "conductor-api",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+            response = await client.post(
+                settings.GITHUB_OAUTH_TOKEN_URL,
+                data=payload,
+                headers=headers,
+            )
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="GitHub OAuth token exchange failed",
+        ) from exc
+
+    data = response.json()
+
+    if response.status_code >= 400:
+        detail = data.get("error_description") or data.get("error") or "GitHub OAuth token exchange failed"
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=detail,
+        )
+
+    access_token = data.get("access_token")
+
+    if not access_token:
+        detail = data.get("error_description") or data.get("error") or "GitHub OAuth token exchange failed"
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=detail)
+
+    return access_token
+
+
+async def fetch_user(token: str) -> GitHubUser:
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "Authorization": f"Bearer {token}",
+        "User-Agent": "conductor-api",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=TIMEOUT, base_url=settings.GITHUB_API_BASE) as client:
+            user_response = await client.get("/user", headers=headers)
+
+            if user_response.status_code == status.HTTP_401_UNAUTHORIZED:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid or expired GitHub access token",
+                )
+
+            if user_response.status_code >= 400:
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=f"GitHub user fetch failed: {user_response.status_code}",
+                )
+
+            user_payload = user_response.json()
+            email = user_payload.get("email")
+
+            if not email:
+                email = await fetch_primary_email(client, token)
+    except HTTPException:
+        raise
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="GitHub user fetch failed",
+        ) from exc
+
+    return GitHubUser(
+        login=user_payload["login"],
+        name=user_payload.get("name"),
+        avatar_url=user_payload.get("avatar_url"),
+        email=email,
+    )
+
+
+async def fetch_primary_email(client: httpx.AsyncClient, token: str) -> str | None:
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "Authorization": f"Bearer {token}",
+        "User-Agent": "conductor-api",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+    try:
+        response = await client.get("/user/emails", headers=headers)
+    except httpx.HTTPError:
+        return None
+
+    if response.status_code != status.HTTP_200_OK:
+        return None
+
+    emails = response.json()
+    return _pick_best_email(emails)
+
+
+def _pick_best_email(emails: list[dict]) -> str | None:
+    if not emails:
+        return None
+
+    for email_entry in emails:
+        if email_entry.get("primary") and email_entry.get("verified"):
+            return email_entry.get("email")
+
+    for email_entry in emails:
+        if email_entry.get("verified"):
+            return email_entry.get("email")
+
+    return emails[0].get("email")
+</file>
+
+<file path="backend/tools/github_tool.py">
+import asyncio
+from typing import Any
+
+from fastapi import HTTPException, status
+from github import Github
+from github.GithubException import GithubException, UnknownObjectException
+
+from tools.github_oauth import TIMEOUT
+
+
+class GitHubTool:
+    def __init__(self, repo: str, branch: str, access_token: str):
+        self.repo_name = repo
+        self.branch = branch
+        self.access_token = access_token
+        self.client = Github(
+            login_or_token=access_token,
+            timeout=int(TIMEOUT.read),
+            per_page=100,
+        )
+        self.repo = self.client.get_repo(repo)
+
+    async def ensure_branch_exists(self) -> str:
+        try:
+            branch = await asyncio.to_thread(self.repo.get_branch, self.branch)
+            return branch.name
+        except UnknownObjectException:
+            default_branch_name = await asyncio.to_thread(lambda: self.repo.default_branch)
+            source_branch = await asyncio.to_thread(self.repo.get_branch, default_branch_name)
+            ref = f"refs/heads/{self.branch}"
+
+            try:
+                await asyncio.to_thread(
+                    self.repo.create_git_ref,
+                    ref=ref,
+                    sha=source_branch.commit.sha,
+                )
+                return self.branch
+            except GithubException as exc:
+                raise self._github_http_exception(
+                    exc,
+                    default_detail=f"Failed to create branch '{self.branch}'",
+                ) from exc
+        except GithubException as exc:
+            raise self._github_http_exception(
+                exc,
+                default_detail=f"Failed to access branch '{self.branch}'",
+            ) from exc
+
+    async def read_file(self, path: str) -> str | None:
+        try:
+            contents = await asyncio.to_thread(self.repo.get_contents, path, ref=self.branch)
+        except UnknownObjectException:
+            return None
+        except GithubException as exc:
+            raise self._github_http_exception(
+                exc,
+                default_detail=f"Failed to read file '{path}'",
+            ) from exc
+
+        if isinstance(contents, list):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Path '{path}' is a directory, not a file",
+            )
+
+        return contents.decoded_content.decode("utf-8")
+
+    async def create_or_update_file(
+        self,
+        path: str,
+        content: str,
+        message: str,
+    ) -> dict[str, Any]:
+        await self.ensure_branch_exists()
+
+        try:
+            existing = await asyncio.to_thread(self.repo.get_contents, path, ref=self.branch)
+        except UnknownObjectException:
+            existing = None
+        except GithubException as exc:
+            raise self._github_http_exception(
+                exc,
+                default_detail=f"Failed to check file '{path}'",
+            ) from exc
+
+        try:
+            if existing is None:
+                result = await asyncio.to_thread(
+                    self.repo.create_file,
+                    path=path,
+                    message=message,
+                    content=content,
+                    branch=self.branch,
+                )
+            else:
+                if isinstance(existing, list):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Path '{path}' is a directory, not a file",
+                    )
+
+                result = await asyncio.to_thread(
+                    self.repo.update_file,
+                    path=path,
+                    message=message,
+                    content=content,
+                    sha=existing.sha,
+                    branch=self.branch,
+                )
+        except GithubException as exc:
+            raise self._github_http_exception(
+                exc,
+                default_detail=f"Failed to write file '{path}'",
+            ) from exc
+
+        return {
+            "path": path,
+            "branch": self.branch,
+            "commit_sha": result["commit"].sha,
+        }
+
+    async def open_pull_request(
+        self,
+        title: str,
+        body: str,
+        base: str | None = None,
+    ) -> dict[str, Any]:
+        await self.ensure_branch_exists()
+        base_branch = base or await asyncio.to_thread(lambda: self.repo.default_branch)
+
+        try:
+            pr = await asyncio.to_thread(
+                self.repo.create_pull,
+                title=title,
+                body=body,
+                head=self.branch,
+                base=base_branch,
+            )
+        except GithubException as exc:
+            raise self._github_http_exception(
+                exc,
+                default_detail="Failed to open pull request",
+            ) from exc
+
+        return {
+            "number": pr.number,
+            "url": pr.html_url,
+            "title": pr.title,
+            "base": base_branch,
+            "head": self.branch,
+        }
+
+    def _github_http_exception(self, exc: GithubException, default_detail: str) -> HTTPException:
+        detail = default_detail
+
+        if getattr(exc, "data", None):
+            if isinstance(exc.data, dict):
+                detail = exc.data.get("message") or detail
+
+        status_code = exc.status if exc.status else status.HTTP_502_BAD_GATEWAY
+        if status_code < 400:
+            status_code = status.HTTP_502_BAD_GATEWAY
+
+        return HTTPException(status_code=status_code, detail=detail)
+</file>
+
+<file path="backend/tools/github_user_api.py">
+from urllib.parse import quote
+
+import httpx
+from fastapi import HTTPException, status
+
+from config import settings
+from models.schemas import GitHubBranch, GitHubRepository
+
+
+TIMEOUT = httpx.Timeout(connect=5.0, read=15.0, write=10.0, pool=5.0)
+
+
+def _github_headers(token: str) -> dict[str, str]:
+    return {
+        "Accept": "application/vnd.github+json",
+        "Authorization": f"Bearer {token}",
+        "User-Agent": "conductor-api",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+
+async def list_repositories(token: str) -> list[GitHubRepository]:
+    try:
+        async with httpx.AsyncClient(timeout=TIMEOUT, base_url=settings.GITHUB_API_BASE) as client:
+            response = await client.get(
+                "/user/repos",
+                headers=_github_headers(token),
+                params={
+                    "per_page": 100,
+                    "sort": "updated",
+                    "affiliation": "owner,collaborator,organization_member",
+                },
+            )
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="GitHub repos fetch failed",
+        ) from exc
+
+    if response.status_code == status.HTTP_401_UNAUTHORIZED:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired GitHub access token",
+        )
+
+    if response.status_code >= 400:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="GitHub repos fetch failed",
+        )
+
+    return [
+        GitHubRepository(
+            id=repo["id"],
+            name=repo["name"],
+            full_name=repo["full_name"],
+            private=bool(repo["private"]),
+            default_branch=repo.get("default_branch") or "main",
+            html_url=repo["html_url"],
+        )
+        for repo in response.json()
+    ]
+
+
+async def list_branches(token: str, repo_full_name: str) -> list[GitHubBranch]:
+    owner, repo = _parse_repo_full_name(repo_full_name)
+    owner = quote(owner, safe="")
+    repo = quote(repo, safe="")
+
+    try:
+        async with httpx.AsyncClient(timeout=TIMEOUT, base_url=settings.GITHUB_API_BASE) as client:
+            response = await client.get(
+                f"/repos/{owner}/{repo}/branches",
+                headers=_github_headers(token),
+                params={"per_page": 100},
+            )
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="GitHub branches fetch failed",
+        ) from exc
+
+    if response.status_code == status.HTTP_401_UNAUTHORIZED:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired GitHub access token",
+        )
+
+    if response.status_code == status.HTTP_404_NOT_FOUND:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Repository not found or no access",
+        )
+
+    if response.status_code >= 400:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="GitHub branches fetch failed",
+        )
+
+    return [
+        GitHubBranch(name=branch["name"], protected=branch.get("protected", False))
+        for branch in response.json()
+    ]
+
+
+def _parse_repo_full_name(repo_full_name: str) -> tuple[str, str]:
+    if "/" not in repo_full_name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Repository must be in owner/repo format",
+        )
+
+    owner, repo = repo_full_name.split("/", 1)
+    owner = owner.strip()
+    repo = repo.strip()
+
+    if not owner or not repo:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Repository must be in owner/repo format",
+        )
+
+    return owner, repo
+</file>
+
+<file path="backend/tools/security_tool.py">
+import asyncio
+
+
+class SecurityTool:
+    """Semgrep security scanner (Phase 2)"""
+
+    async def run_semgrep(self, repo_path: str) -> dict:
+        """Run Semgrep security scan - STUB for Phase 1"""
+        await asyncio.sleep(0.1)  # Simulate scan
+        return {
+            "results": [],
+            "errors": [],
+        }
+</file>
+
+<file path="backend/tools/test_runner.py">
+from __future__ import annotations
+
+import asyncio
+import tempfile
+import time
+from pathlib import Path
+
+
+class TestRunner:
+    """
+    Phase 1 test runner scaffold.
+
+    This is intentionally a stub for Module 1C. The full clone-and-pytest
+    implementation lands in Module 2, but the public interface is ready now.
+    """
+
+    def __init__(
+        self,
+        repo: str,
+        branch: str,
+        access_token: str | None = None,
+        timeout_seconds: int = 300,
+    ) -> None:
+        self.repo = repo
+        self.branch = branch
+        self.access_token = access_token
+        self.timeout_seconds = timeout_seconds
+
+    async def _run_command(
+        self,
+        command: list[str],
+        cwd: str | Path | None = None,
+    ) -> tuple[int, str, str]:
+        process = await asyncio.create_subprocess_exec(
+            *command,
+            cwd=str(cwd) if cwd else None,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(),
+                timeout=self.timeout_seconds,
+            )
+        except asyncio.TimeoutError:
+            process.kill()
+            await process.communicate()
+            return 124, "", f"Command timed out after {self.timeout_seconds}s"
+
+        return process.returncode, stdout.decode("utf-8", errors="replace"), stderr.decode(
+            "utf-8",
+            errors="replace",
+        )
+
+    def _build_error_report(self, error: str) -> dict:
+        return {
+            "status": "error",
+            "summary": "Test runner failed before pytest execution",
+            "repo": self.repo,
+            "branch": self.branch,
+            "framework": "pytest",
+            "phase": "module-1c-stub",
+            "duration_seconds": 0.0,
+            "tests": {
+                "collected": 0,
+                "passed": 0,
+                "failed": 0,
+                "skipped": 0,
+                "errors": 1,
+            },
+            "failures": [
+                {
+                    "type": "runner_error",
+                    "message": error,
+                }
+            ],
+            "stdout": "",
+            "stderr": error,
+        }
+
+    async def run(self) -> dict:
+        """
+        Phase 1 stub.
+
+        The final implementation will clone the repo, checkout the target
+        branch, and execute pytest. For now we keep the interface stable and
+        return deterministic mock data for the rest of the pipeline.
+        """
+        if "/" not in self.repo:
+            return self._build_error_report("Repository must be in 'owner/repo' format")
+
+        started_at = time.perf_counter()
+
+        try:
+            with tempfile.TemporaryDirectory(prefix="conductor-tests-") as temp_dir:
+                repo_dir = Path(temp_dir) / self.repo.split("/", 1)[1]
+
+                # Phase 1 note:
+                # We intentionally do not clone or run pytest yet. This temp
+                # directory scaffolding keeps the control flow close to the
+                # final Module 2 implementation.
+                mock_stdout = (
+                    "Phase 1 stub: clone skipped, checkout skipped, pytest skipped.\n"
+                    f"Prepared workspace at {repo_dir}"
+                )
+
+            duration = round(time.perf_counter() - started_at, 3)
+            return {
+                "status": "success",
+                "summary": "Phase 1 stub test run completed with mock pytest data",
+                "repo": self.repo,
+                "branch": self.branch,
+                "framework": "pytest",
+                "phase": "module-1c-stub",
+                "duration_seconds": duration,
+                "tests": {
+                    "collected": 6,
+                    "passed": 6,
+                    "failed": 0,
+                    "skipped": 0,
+                    "errors": 0,
+                },
+                "coverage": {
+                    "line_percent": 82.4,
+                },
+                "failures": [],
+                "stdout": mock_stdout,
+                "stderr": "",
+            }
+        except Exception as exc:
+            return self._build_error_report(str(exc))
+</file>
+
+<file path="docker-compose.yml">
+services:
+  #
+  # Infrastructure Services
+  #
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: conductor-postgres
+    environment:
+      POSTGRES_USER: conductor
+      POSTGRES_PASSWORD: conductor_dev
+      POSTGRES_DB: conductor
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U conductor"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - conductor-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: conductor-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - conductor-network
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: conductor-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - conductor-network
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: conductor-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    # Pull models after container starts:
+    # docker exec -it conductor-ollama ollama pull deepseek-coder-v2-lite
+    # docker exec -it conductor-ollama ollama pull qwen2.5:32b
+    # docker exec -it conductor-ollama ollama pull mistral-nemo:12b
+    networks:
+      - conductor-network
+
+  # ===========================================
+  # Application Services (commented out for Module 1A)
+  # Uncomment in Module 1D after workers are ready
+  # ===========================================
+
+  # api:
+  #   build:
+  #     context: ./backend
+  #     dockerfile: Dockerfile
+  #   container_name: conductor-api
+  #   ports:
+  #     - "8000:8000"
+  #   env_file:
+  #     - ./backend/.env
+  #   environment:
+  #     - POSTGRES_HOST=postgres
+  #     - REDIS_HOST=redis
+  #     - QDRANT_HOST=qdrant
+  #     - OLLAMA_HOST=ollama
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #     qdrant:
+  #       condition: service_healthy
+  #   volumes:
+  #     - ./backend:/app
+  #   command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+  #   networks:
+  #     - conductor-network
+
+  # worker:
+  #   build:
+  #     context: ./backend
+  #     dockerfile: Dockerfile
+  #   container_name: conductor-worker
+  #   env_file:
+  #     - ./backend/.env
+  #   environment:
+  #     - POSTGRES_HOST=postgres
+  #     - REDIS_HOST=redis
+  #     - QDRANT_HOST=qdrant
+  #     - OLLAMA_HOST=ollama
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   volumes:
+  #     - ./backend:/app
+  #   command: celery -A workers.celery_app worker --loglevel=info
+  #   networks:
+  #     - conductor-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  qdrant_data:
+  ollama_data:
+
+networks:
+  conductor-network:
+    driver: bridge
+</file>
+
+<file path="frontend/.env.example">
+
+</file>
+
+<file path="frontend/.gitignore">
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+</file>
+
+<file path="frontend/.vite/deps/_metadata.json">
+{
+  "hash": "faaf9443",
+  "configHash": "45cfbf68",
+  "lockfileHash": "e3b0c442",
+  "browserHash": "17af4f4e",
+  "optimized": {},
+  "chunks": {}
+}
+</file>
+
+<file path="frontend/.vite/deps/package.json">
+{
+  "type": "module"
+}
+</file>
+
+<file path="frontend/index.html">
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My Google AI Studio App</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+</file>
+
+<file path="frontend/metadata.json">
+{
+  "name": "AI driven IT company",
+  "description": "AI-powered software company system for monitoring and controlling a fleet of autonomous agents.",
+  "requestFramePermissions": []
+}
+</file>
+
+<file path="frontend/package.json">
+{
+  "name": "react-example",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port=3000 --host=0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview",
+    "clean": "rm -rf dist",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@google/genai": "^1.29.0",
+    "@tailwindcss/vite": "^4.1.14",
+    "@tanstack/react-query": "^5.96.2",
+    "@vitejs/plugin-react": "^5.0.4",
+    "clsx": "^2.1.1",
+    "dotenv": "^17.2.3",
+    "express": "^4.21.2",
+    "lucide-react": "^0.546.0",
+    "motion": "^12.23.24",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router-dom": "^7.14.0",
+    "recharts": "^3.8.1",
+    "tailwind-merge": "^3.5.0",
+    "vite": "^6.2.0",
+    "zustand": "^5.0.12"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.14.0",
+    "autoprefixer": "^10.4.21",
+    "tailwindcss": "^4.1.14",
+    "tsx": "^4.21.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  }
+}
+</file>
+
+<file path="frontend/README.md">
+<div align="center">
+<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+</div>
+
+# Run and deploy your AI Studio app
+
+This contains everything you need to run your app locally.
+
+View your app in AI Studio: https://ai.studio/apps/b7966b55-5d50-4d76-968b-2e509a43f53f
+
+## Run Locally
+
+**Prerequisites:**  Node.js
+
+
+1. Install dependencies:
+   `npm install`
+2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+3. Run the app:
+   `npm run dev`
+</file>
+
+<file path="frontend/src/App.tsx">
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+export default function App() {
+  return <div></div>;
+}
+</file>
+
+<file path="frontend/src/components/auth/ProtectedRoute.tsx">
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+import React, { useEffect, useState } from 'react';
+import { Navigate, useLocation } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
+import { useAuthStore } from '../../store/authStore';
+
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+}
+
+export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const isLoading = useAuthStore((state) => state.isLoading);
+  const hasHydrated = useAuthStore((state) => state.hasHydrated);
+  const checkAuth = useAuthStore((state) => state.checkAuth);
+  const location = useLocation();
+  const [isReady, setIsReady] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    if (!hasHydrated) {
+      return;
+    }
+
+    setIsReady(false);
+
+    const verifyAuth = async () => {
+      await checkAuth();
+
+      if (isMounted) {
+        setIsReady(true);
+      }
+    };
+
+    void verifyAuth();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [checkAuth, hasHydrated]);
+
+  if (!hasHydrated || !isReady || isLoading) {
+    return (
+      <div className="min-h-screen bg-[#0F0F0F] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  return <>{children}</>;
+};
+</file>
+
+<file path="frontend/src/components/layout/AppShell.tsx">
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React from 'react';
+import { Outlet } from 'react-router-dom';
+import { Sidebar } from './Sidebar';
+import { motion, AnimatePresence } from 'motion/react';
+import { useLocation } from 'react-router-dom';
+
+export const AppShell: React.FC = () => {
+  const location = useLocation();
+
+  return (
+    <div className="min-h-screen bg-[#0F0F0F] text-[#F5F5F5] font-sans">
+      <Sidebar />
+      <main className="pl-[220px] min-h-screen">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={location.pathname}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.1 }}
+            className="p-8"
+          >
+            <Outlet />
+          </motion.div>
+        </AnimatePresence>
+      </main>
+    </div>
+  );
+};
+</file>
+
+<file path="frontend/src/components/layout/Sidebar.tsx">
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React from 'react';
+import { NavLink } from 'react-router-dom';
+import {
+  LayoutDashboard,
+  CheckSquare,
+  AlertCircle,
+  Brain,
+  Activity,
+  Terminal,
+  LogOut,
+} from 'lucide-react';
+import { cn } from '../../lib/utils';
+import { useAuthStore } from '../../store/authStore';
+
+const navItems = [
+  { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
+  { icon: CheckSquare, label: 'Tasks', path: '/tasks', count: 3 },
+  { icon: AlertCircle, label: 'Inbox', path: '/inbox', badge: 2 },
+  { icon: Brain, label: 'Memory', path: '/memory' },
+  { icon: Activity, label: 'Activity', path: '/activity' },
+];
+
+export const Sidebar: React.FC = () => {
+  const user = useAuthStore((state) => state.user);
+  const logout = useAuthStore((state) => state.logout);
+
+  return (
+    <aside className="w-[220px] fixed left-0 top-0 h-screen bg-[#0F0F0F] border-r border-[#2A2A2A] flex flex-col z-50">
+      <div className="p-6 flex items-center gap-3">
+        <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
+          <Terminal className="text-white w-5 h-5" />
+        </div>
+        <span className="font-semibold text-lg tracking-tight text-[#F5F5F5]">Conductor</span>
+      </div>
+
+      <nav className="flex-1 px-3 space-y-1">
+        {navItems.map((item) => (
+          <NavLink
+            key={item.path}
+            to={item.path}
+            className={({ isActive }) => cn(
+              'flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors',
+              isActive 
+                ? 'bg-indigo-600/10 text-indigo-400 font-medium' 
+                : 'text-[#A0A0A0] hover:text-[#F5F5F5] hover:bg-[#1A1A1A]'
+            )}
+          >
+            <div className="flex items-center gap-3">
+              <item.icon className="w-4 h-4" />
+              {item.label}
+            </div>
+            {item.badge && (
+              <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">
+                {item.badge}
+              </span>
+            )}
+            {item.count && (
+              <span className="text-[#5A5A5A] text-[10px] font-mono">
+                {item.count}
+              </span>
+            )}
+          </NavLink>
+        ))}
+      </nav>
+
+      <div className="p-4 border-t border-[#2A2A2A] space-y-4">
+        <button
+          onClick={logout}
+          className="flex items-center gap-3 px-3 py-2 w-full text-[#5A5A5A] hover:text-red-400 text-sm transition-colors"
+        >
+          <LogOut className="w-4 h-4" />
+          Logout
+        </button>
+
+        <div className="flex items-center gap-3 px-3 py-2">
+          <img
+            src={user?.avatar_url || 'https://avatar.vercel.sh/conductor'}
+            alt={user?.name || 'User'}
+            className="w-8 h-8 rounded-full border border-[#2A2A2A]"
+            onError={(event) => {
+              event.currentTarget.src = 'https://avatar.vercel.sh/conductor';
+            }}
+          />
+          <div className="flex flex-col overflow-hidden">
+            <span className="text-xs font-medium text-[#F5F5F5] truncate">
+              {user?.name || user?.login || 'User'}
+            </span>
+            <span className="text-[10px] text-[#5A5A5A] truncate">
+              @{user?.login || 'user'}
+            </span>
+          </div>
+        </div>
+      </div>
+    </aside>
+  );
+};
+</file>
+
+<file path="frontend/src/components/shared/AgentChip.tsx">
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React from 'react';
+import { AgentRole } from '../../types/agent';
+import { cn } from '../../lib/utils';
+
+interface AgentChipProps {
+  role: AgentRole;
+  className?: string;
+}
+
+export const agentColors: Record<AgentRole, string> = {
+  Developer: '#6366F1',
+  QA: '#14B8A6',
+  CISO: '#F97316',
+  Critic: '#A855F7',
+  DevOps: '#22C55E',
+  'CEO/Manager': '#EC4899',
+  Orchestrator: '#64748B',
+};
+
+export const AgentChip: React.FC<AgentChipProps> = ({ role, className }) => {
+  const color = agentColors[role];
+  return (
+    <div 
+      className={cn('flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium border border-white/5', className)}
+      style={{ backgroundColor: `${color}15`, color: color }}
+    >
+      <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
+      {role}
+    </div>
+  );
+};
+</file>
+
+<file path="frontend/src/components/shared/StatusBadge.tsx">
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React from 'react';
+import { TaskStatus } from '../../types/task';
+import { cn } from '../../lib/utils';
+
+interface StatusBadgeProps {
+  status: TaskStatus;
+  className?: string;
+}
+
+const statusConfig: Record<TaskStatus, { label: string; color: string }> = {
+  running: { label: 'Running', color: 'text-blue-400 bg-blue-400/15' },
+  retrying: { label: 'Retrying', color: 'text-amber-400 bg-amber-400/15' },
+  blocked: { label: 'Blocked', color: 'text-orange-400 bg-orange-400/15' },
+  escalated: { label: 'Escalated', color: 'text-red-400 bg-red-400/15' },
+  deployed: { label: 'Deployed', color: 'text-green-400 bg-green-400/15' },
+  failed: { label: 'Failed', color: 'text-red-500 bg-red-500/15' },
+};
+
+export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, className }) => {
+  const config = statusConfig[status];
+  return (
+    <span className={cn(
+      'px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wider',
+      config.color,
+      className
+    )}>
+      {config.label}
+    </span>
+  );
+};
+</file>
+
+<file path="frontend/src/components/tasks/TaskCreateModal.tsx">
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+import React, { useEffect, useMemo, useState } from 'react';
+import { AlertCircle, GitBranch, Github, Loader2, Plus, Trash2, X } from 'lucide-react';
+import { useGitHubStore } from '../../store/githubStore';
+import { cn } from '../../lib/utils';
+
+interface TaskCreateModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit: (taskData: TaskFormData) => void | Promise<void>;
+}
+
+export interface TaskFormData {
+  title: string;
+  description: string;
+  repo: string;
+  branch: string;
+  priority: 'Low' | 'Medium' | 'High' | 'Critical';
+  acceptance_criteria: string[];
+  context_refs: string[];
+}
+
+const INITIAL_FORM_DATA: TaskFormData = {
+  title: '',
+  description: '',
+  repo: '',
+  branch: '',
+  priority: 'Medium',
+  acceptance_criteria: [''],
+  context_refs: [],
+};
+
+const getErrorMessage = (error: unknown, fallback: string) =>
+  error instanceof Error ? error.message : fallback;
+
+export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({
+  isOpen,
+  onClose,
+  onSubmit,
+}) => {
+  const repositories = useGitHubStore((state) => state.repositories);
+  const branches = useGitHubStore((state) => state.branches);
+  const isLoadingRepos = useGitHubStore((state) => state.isLoadingRepos);
+  const isLoadingBranches = useGitHubStore((state) => state.isLoadingBranches);
+  const githubError = useGitHubStore((state) => state.error);
+  const fetchRepositories = useGitHubStore((state) => state.fetchRepositories);
+  const fetchBranches = useGitHubStore((state) => state.fetchBranches);
+
+  const [formData, setFormData] = useState<TaskFormData>(INITIAL_FORM_DATA);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const selectedRepository = useMemo(
+    () => repositories.find((repository) => repository.full_name === formData.repo),
+    [formData.repo, repositories],
+  );
+
+  useEffect(() => {
+    if (isOpen && repositories.length === 0) {
+      void fetchRepositories().catch(() => undefined);
+    }
+  }, [fetchRepositories, isOpen, repositories.length]);
+
+  useEffect(() => {
+    if (isOpen && formData.repo) {
+      void fetchBranches(formData.repo).catch(() => undefined);
+    }
+  }, [fetchBranches, formData.repo, isOpen]);
+
+  useEffect(() => {
+    if (!formData.repo) {
+      return;
+    }
+
+    if (!formData.branch && selectedRepository?.default_branch) {
+      setFormData((prev) => ({ ...prev, branch: selectedRepository.default_branch }));
+      return;
+    }
+
+    const loadedBranches = branches[formData.repo];
+
+    if (
+      loadedBranches &&
+      formData.branch &&
+      !loadedBranches.some((branch) => branch.name === formData.branch) &&
+      selectedRepository?.default_branch
+    ) {
+      setFormData((prev) => ({ ...prev, branch: selectedRepository.default_branch }));
+    }
+  }, [branches, formData.branch, formData.repo, selectedRepository]);
+
+  const handleAddCriteria = () => {
+    setFormData((prev) => ({
+      ...prev,
+      acceptance_criteria: [...prev.acceptance_criteria, ''],
+    }));
+  };
+
+  const handleRemoveCriteria = (index: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      acceptance_criteria: prev.acceptance_criteria.filter((_, currentIndex) => currentIndex !== index),
+    }));
+  };
+
+  const handleCriteriaChange = (index: number, value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      acceptance_criteria: prev.acceptance_criteria.map((criterion, currentIndex) =>
+        currentIndex === index ? value : criterion,
+      ),
+    }));
+  };
+
+  const validate = () => {
+    const nextErrors: Record<string, string> = {};
+
+    if (!formData.title.trim()) {
+      nextErrors.title = 'Title is required';
+    }
+
+    if (!formData.description.trim()) {
+      nextErrors.description = 'Description is required';
+    }
+
+    if (!formData.repo) {
+      nextErrors.repo = 'Repository is required';
+    }
+
+    if (!formData.branch) {
+      nextErrors.branch = 'Branch is required';
+    }
+
+    if (formData.acceptance_criteria.filter((criterion) => criterion.trim()).length === 0) {
+      nextErrors.acceptance_criteria = 'At least one acceptance criterion is required';
+    }
+
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
+
+  const resetForm = () => {
+    setFormData(INITIAL_FORM_DATA);
+    setErrors({});
+    setSubmitError(null);
+    setIsSubmitting(false);
+  };
+
+  const handleClose = () => {
+    resetForm();
+    onClose();
+  };
+
+  const handleRepositoryChange = (repoFullName: string) => {
+    const defaultBranch =
+      repositories.find((repository) => repository.full_name === repoFullName)?.default_branch || '';
+
+    setFormData((prev) => ({
+      ...prev,
+      repo: repoFullName,
+      branch: defaultBranch,
+    }));
+
+    setErrors((prev) => {
+      const nextErrors = { ...prev };
+      delete nextErrors.repo;
+      delete nextErrors.branch;
+      return nextErrors;
+    });
+  };
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSubmitError(null);
+
+    if (!validate()) {
+      return;
+    }
+
+    const cleanedData = {
+      ...formData,
+      title: formData.title.trim(),
+      description: formData.description.trim(),
+      acceptance_criteria: formData.acceptance_criteria
+        .map((criterion) => criterion.trim())
+        .filter(Boolean),
+    };
+
+    setIsSubmitting(true);
+
+    try {
+      await onSubmit(cleanedData);
+      handleClose();
+    } catch (error) {
+      setSubmitError(getErrorMessage(error, 'Failed to create task'));
+      setIsSubmitting(false);
+    }
+  };
+
+  if (!isOpen) {
+    return null;
+  }
+
+  const selectedRepoBranches = formData.repo ? branches[formData.repo] || [] : [];
+  const isLoadingSelectedBranches = formData.repo ? isLoadingBranches[formData.repo] : false;
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
+        <div className="flex items-center justify-between p-6 border-b border-[#2A2A2A]">
+          <h2 className="text-xl font-semibold text-[#F5F5F5]">Create New Task</h2>
+          <button
+            onClick={handleClose}
+            className="text-[#5A5A5A] hover:text-[#F5F5F5] transition-colors"
+            aria-label="Close task creation modal"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form
+          id="task-create-form"
+          onSubmit={handleSubmit}
+          className="flex-1 overflow-y-auto p-6 space-y-6"
+        >
+          {githubError && (
+            <div className="flex items-start gap-3 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+              <span>{githubError}</span>
+            </div>
+          )}
+
+          {submitError && (
+            <div className="flex items-start gap-3 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+              <span>{submitError}</span>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-[#F5F5F5]">
+              Task Title <span className="text-red-400">*</span>
+            </label>
+            <input
+              type="text"
+              value={formData.title}
+              onChange={(event) =>
+                setFormData((prev) => ({ ...prev, title: event.target.value }))
+              }
+              placeholder="e.g., Implement user authentication API"
+              className={cn(
+                'w-full bg-[#0F0F0F] border rounded-lg px-4 py-3 text-sm text-[#F5F5F5] outline-none transition-all',
+                errors.title
+                  ? 'border-red-500 focus:border-red-400'
+                  : 'border-[#2A2A2A] focus:border-indigo-500',
+              )}
+            />
+            {errors.title && (
+              <div className="flex items-center gap-2 text-red-400 text-xs">
+                <AlertCircle className="w-3 h-3" />
+                {errors.title}
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-[#F5F5F5]">
+              Description <span className="text-red-400">*</span>
+            </label>
+            <textarea
+              value={formData.description}
+              onChange={(event) =>
+                setFormData((prev) => ({ ...prev, description: event.target.value }))
+              }
+              placeholder="Describe what needs to be done..."
+              rows={4}
+              className={cn(
+                'w-full bg-[#0F0F0F] border rounded-lg px-4 py-3 text-sm text-[#F5F5F5] outline-none transition-all resize-none',
+                errors.description
+                  ? 'border-red-500 focus:border-red-400'
+                  : 'border-[#2A2A2A] focus:border-indigo-500',
+              )}
+            />
+            {errors.description && (
+              <div className="flex items-center gap-2 text-red-400 text-xs">
+                <AlertCircle className="w-3 h-3" />
+                {errors.description}
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-[#F5F5F5] flex items-center gap-2">
+                <Github className="w-4 h-4" />
+                Repository <span className="text-red-400">*</span>
+              </label>
+              {isLoadingRepos ? (
+                <div className="w-full bg-[#0F0F0F] border border-[#2A2A2A] rounded-lg px-4 py-3 flex items-center gap-2 text-[#5A5A5A]">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span className="text-sm">Loading repositories...</span>
+                </div>
+              ) : (
+                <select
+                  value={formData.repo}
+                  onChange={(event) => handleRepositoryChange(event.target.value)}
+                  className={cn(
+                    'w-full bg-[#0F0F0F] border rounded-lg px-4 py-3 text-sm text-[#F5F5F5] outline-none transition-all',
+                    errors.repo
+                      ? 'border-red-500 focus:border-red-400'
+                      : 'border-[#2A2A2A] focus:border-indigo-500',
+                  )}
+                >
+                  <option value="">Select repository</option>
+                  {repositories.length === 0 && (
+                    <option value="" disabled>
+                      No repositories available
+                    </option>
+                  )}
+                  {repositories.map((repository) => (
+                    <option key={repository.id} value={repository.full_name}>
+                      {repository.full_name}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {errors.repo && (
+                <div className="flex items-center gap-2 text-red-400 text-xs">
+                  <AlertCircle className="w-3 h-3" />
+                  {errors.repo}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-[#F5F5F5] flex items-center gap-2">
+                <GitBranch className="w-4 h-4" />
+                Branch <span className="text-red-400">*</span>
+              </label>
+              {isLoadingSelectedBranches ? (
+                <div className="w-full bg-[#0F0F0F] border border-[#2A2A2A] rounded-lg px-4 py-3 flex items-center gap-2 text-[#5A5A5A]">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span className="text-sm">Loading branches...</span>
+                </div>
+              ) : (
+                <select
+                  value={formData.branch}
+                  onChange={(event) =>
+                    setFormData((prev) => ({ ...prev, branch: event.target.value }))
+                  }
+                  disabled={!formData.repo}
+                  className={cn(
+                    'w-full bg-[#0F0F0F] border rounded-lg px-4 py-3 text-sm text-[#F5F5F5] outline-none transition-all',
+                    !formData.repo && 'opacity-50 cursor-not-allowed',
+                    errors.branch
+                      ? 'border-red-500 focus:border-red-400'
+                      : 'border-[#2A2A2A] focus:border-indigo-500',
+                  )}
+                >
+                  <option value="">Select branch</option>
+                  {selectedRepoBranches.map((branch) => (
+                    <option key={branch.name} value={branch.name}>
+                      {branch.name}
+                      {branch.protected ? ' (protected)' : ''}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {errors.branch && (
+                <div className="flex items-center gap-2 text-red-400 text-xs">
+                  <AlertCircle className="w-3 h-3" />
+                  {errors.branch}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-[#F5F5F5]">Priority</label>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              {(['Low', 'Medium', 'High', 'Critical'] as const).map((priority) => (
+                <button
+                  key={priority}
+                  type="button"
+                  onClick={() => setFormData((prev) => ({ ...prev, priority }))}
+                  className={cn(
+                    'px-4 py-2 rounded-lg text-sm font-medium transition-all',
+                    formData.priority === priority
+                      ? priority === 'Critical'
+                        ? 'bg-red-600 text-white'
+                        : priority === 'High'
+                          ? 'bg-orange-600 text-white'
+                          : priority === 'Medium'
+                            ? 'bg-amber-600 text-white'
+                            : 'bg-indigo-600 text-white'
+                      : 'bg-[#242424] text-[#A0A0A0] hover:bg-[#2A2A2A]',
+                  )}
+                >
+                  {priority}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-[#F5F5F5]">
+                Acceptance Criteria <span className="text-red-400">*</span>
+              </label>
+              <button
+                type="button"
+                onClick={handleAddCriteria}
+                className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
+              >
+                <Plus className="w-3 h-3" />
+                Add criterion
+              </button>
+            </div>
+            <div className="space-y-3">
+              {formData.acceptance_criteria.map((criterion, index) => (
+                <div key={index} className="flex gap-2">
+                  <input
+                    type="text"
+                    value={criterion}
+                    onChange={(event) => handleCriteriaChange(index, event.target.value)}
+                    placeholder={`Criterion ${index + 1}`}
+                    className="flex-1 bg-[#0F0F0F] border border-[#2A2A2A] rounded-lg px-4 py-2 text-sm text-[#F5F5F5] outline-none focus:border-indigo-500 transition-all"
+                  />
+                  {formData.acceptance_criteria.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveCriteria(index)}
+                      className="text-[#5A5A5A] hover:text-red-400 transition-colors"
+                      aria-label={`Remove criterion ${index + 1}`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            {errors.acceptance_criteria && (
+              <div className="flex items-center gap-2 text-red-400 text-xs">
+                <AlertCircle className="w-3 h-3" />
+                {errors.acceptance_criteria}
+              </div>
+            )}
+          </div>
+        </form>
+
+        <div className="flex items-center justify-end gap-3 p-6 border-t border-[#2A2A2A]">
+          <button
+            type="button"
+            onClick={handleClose}
+            className="px-6 py-2.5 rounded-lg text-sm font-medium text-[#A0A0A0] bg-transparent border border-[#2A2A2A] hover:border-[#383838] transition-all"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="task-create-form"
+            disabled={isSubmitting}
+            className="px-6 py-2.5 rounded-lg text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed transition-all shadow-lg shadow-indigo-500/20"
+          >
+            {isSubmitting ? 'Creating...' : 'Create Task'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+</file>
+
+<file path="frontend/src/index.css">
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+@layer base {
+  body {
+    @apply bg-[#0F0F0F] text-[#F5F5F5] antialiased;
+  }
+}
+
+/* Custom scrollbar for dark theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0F0F0F;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2A2A2A;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #383838;
+}
+</file>
+
+<file path="frontend/src/lib/utils.ts">
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+</file>
+
+<file path="frontend/src/main.tsx">
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import { RouterProvider } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { router } from './router';
+import './index.css';
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5,
+      retry: 1,
+    },
+  },
+});
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>
+  </StrictMode>,
+);
+</file>
+
+<file path="frontend/src/mockData.ts">
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import { Task, TaskEvent, QAResult, MemoryEntry, Escalation } from './types/task';
+
+export const MOCK_TASKS: Task[] = [
+  {
+    id: 'TASK-0042',
+    title: 'Implement anomaly detection API with IsolationForest',
+    status: 'retrying',
+    currentAgent: 'Developer',
+    retryCount: 2,
+    maxRetries: 3,
+    timeElapsed: '4m 32s',
+    prNumber: 42,
+    progress: 65,
+    createdAt: '2 hours ago',
+    priority: 'High',
+    repo: 'org/incident-dashboard',
+    branch: 'feat/anomaly-api',
+    commitHash: 'a1b2c3d'
+  },
+  {
+    id: 'TASK-0039',
+    title: 'Refactor audit logging for SQL injection prevention',
+    status: 'blocked',
+    currentAgent: 'CISO',
+    timeElapsed: '12m 10s',
+    progress: 40,
+    createdAt: '5 hours ago',
+    priority: 'Critical',
+    repo: 'org/auth-service',
+    branch: 'fix/sql-injection',
+    commitHash: 'e5f6g7h'
+  },
+  {
+    id: 'TASK-0045',
+    title: 'Optimize Redis cache TTL for session management',
+    status: 'running',
+    currentAgent: 'DevOps',
+    timeElapsed: '1m 45s',
+    progress: 85,
+    createdAt: '15 minutes ago',
+    priority: 'Medium',
+    repo: 'org/core-api',
+    branch: 'perf/redis-ttl',
+    commitHash: 'i9j0k1l'
+  },
+  {
+    id: 'TASK-0041',
+    title: 'Add unit tests for payment webhook edge cases',
+    status: 'deployed',
+    currentAgent: 'QA',
+    timeElapsed: '45m 20s',
+    progress: 100,
+    createdAt: '3 hours ago',
+    priority: 'High',
+    repo: 'org/payments',
+    branch: 'test/webhooks',
+    commitHash: 'm2n3o4p'
+  },
+  {
+    id: 'TASK-0038',
+    title: 'Migrate CI pipeline to GitHub Actions',
+    status: 'failed',
+    currentAgent: 'DevOps',
+    timeElapsed: '1h 5m',
+    progress: 90,
+    createdAt: '8 hours ago',
+    priority: 'Low',
+    repo: 'org/infra',
+    branch: 'migration/gha',
+    commitHash: 'q5r6s7t'
+  },
+  {
+    id: 'TASK-0040',
+    title: 'Update documentation for API v2 release',
+    status: 'escalated',
+    currentAgent: 'Critic',
+    timeElapsed: '22m 15s',
+    progress: 30,
+    createdAt: '4 hours ago',
+    priority: 'Medium',
+    repo: 'org/docs',
+    branch: 'docs/v2-update',
+    commitHash: 'u8v9w0x'
+  }
+];
+
+export const MOCK_EVENTS: TaskEvent[] = [
+  { id: '1', agent: 'Orchestrator', description: 'Task received. Loading memory context... (2 hits found)', timestamp: '10:00:01' },
+  { id: '2', agent: 'Developer', description: 'Reading repository structure via GitHub tool...', timestamp: '10:00:15' },
+  { id: '3', agent: 'Developer', description: 'Generated anomaly.py (143 lines). Opening PR #42...', timestamp: '10:02:30' },
+  { id: '4', agent: 'QA', description: 'Running 26 unit tests + 8 integration tests...', timestamp: '10:02:45' },
+  { id: '5', agent: 'QA', description: 'FAILED — 2 tests failed. NullPointerException at line 42.', timestamp: '10:03:20', type: 'error' },
+  { id: '6', agent: 'Orchestrator', description: 'Retry 1/3 — injecting error context into Dev prompt...', timestamp: '10:03:30' },
+  { id: '7', agent: 'Developer', description: 'Applying fix: added null guard at anomaly.py:42...', timestamp: '10:04:10' },
+  { id: '8', agent: 'QA', description: 'Running tests again...', timestamp: '10:04:20', payload: { unit: { pass: 24, fail: 2 }, integration: { pass: 8, fail: 0 } } },
+  { id: '9', agent: 'QA', description: 'FAILED — single-point series edge case.', timestamp: '10:05:05', type: 'error' },
+  { id: '10', agent: 'Orchestrator', description: 'Retry 2/3 — injecting memory hint from TASK-0031...', timestamp: '10:05:15' }
+];
+
+export const MOCK_QA_RESULT: QAResult = {
+  attempt: 2,
+  status: 'fail',
+  unitTests: { pass: 24, fail: 2 },
+  integrationTests: { pass: 8, fail: 0 },
+  coverage: 81,
+  latency: '187ms',
+  failures: [
+    { name: 'test_isolation_forest_single_point', error: 'ValueError: n_samples=1 must be >= 2', severity: 'high', location: 'anomaly.py:42' },
+    { name: 'test_null_input_handling', error: 'NullPointerException', severity: 'medium', location: 'anomaly.py:15' }
+  ]
+};
+
+export const MOCK_ESCALATIONS: Escalation[] = [
+  {
+    id: 'ESC-001',
+    taskId: 'TASK-0042',
+    type: 'max_retries',
+    reason: 'Escalated — 5 attempts failed',
+    recommendation: 'Root cause: MinMaxScaler clipping values to 0. Suggested fix: replace with RobustScaler.'
+  },
+  {
+    id: 'ESC-002',
+    taskId: 'TASK-0039',
+    type: 'security_block',
+    reason: 'Security block — critical finding',
+    findings: 'CWE-89 SQL Injection at audit_logger.py:31 — use parameterised query'
+  }
+];
+
+export const MOCK_MEMORIES: MemoryEntry[] = [
+  { id: 'M1', content: 'IsolationForest requires n_samples ≥ 2 — use z-score fallback for short series', tags: ['anomaly', 'python'], sourceTaskId: 'TASK-0042', date: '2024-03-20', score: 0.91 },
+  { id: 'M2', content: 'MinMaxScaler clips outlier data — prefer RobustScaler for metric series', tags: ['preprocessing', 'ml'], sourceTaskId: 'TASK-0042', date: '2024-03-20', score: 0.87 },
+  { id: 'M3', content: 'Parameterised queries required — f-string SQL causes CWE-89', tags: ['security', 'sql'], sourceTaskId: 'TASK-0039', date: '2024-03-19' },
+  { id: 'M4', content: 'Redis TTL 60s sufficient for anomaly API access pattern', tags: ['performance', 'redis'], sourceTaskId: 'TASK-0038', date: '2024-03-18' },
+  { id: 'M5', content: 'GitHub Actions pipeline takes ~3m — add timeout 10m to workflow', tags: ['devops', 'ci'], sourceTaskId: 'TASK-0037', date: '2024-03-17' },
+  { id: 'M6', content: 'p95 latency under 200ms achievable with connection pooling', tags: ['performance', 'api'], sourceTaskId: 'TASK-0036', date: '2024-03-16' }
+];
+
+export const ACTIVITY_DATA = [
+  { day: 'Mon', completed: 12, escalated: 2 },
+  { day: 'Tue', completed: 15, escalated: 1 },
+  { day: 'Wed', completed: 8, escalated: 4 },
+  { day: 'Thu', completed: 18, escalated: 0 },
+  { day: 'Fri', completed: 14, escalated: 2 },
+  { day: 'Sat', completed: 5, escalated: 1 },
+  { day: 'Sun', completed: 7, escalated: 0 }
+];
+
+export const AGENT_CALLS = [
+  { id: 1, agent: 'Developer', action: 'generate_code', tokens: 4200, latency: '12.4s', timestamp: '10:00:15' },
+  { id: 2, agent: 'QA', action: 'run_tests', tokens: 1500, latency: '45.2s', timestamp: '10:02:45' },
+  { id: 3, agent: 'Orchestrator', action: 'analyze_error', tokens: 800, latency: '2.1s', timestamp: '10:03:30' },
+  { id: 4, agent: 'Developer', action: 'apply_fix', tokens: 3100, latency: '8.7s', timestamp: '10:04:10' },
+  { id: 5, agent: 'QA', action: 'run_tests', tokens: 1600, latency: '48.1s', timestamp: '10:04:20' },
+  { id: 6, agent: 'Orchestrator', action: 'retrieve_memory', tokens: 3000, latency: '1.5s', timestamp: '10:05:15' }
+];
+</file>
+
+<file path="frontend/src/pages/Activity.tsx">
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState } from 'react';
+import { 
+  CircleCheckBig, 
+  CircleX, 
+  Shield, 
+  Clock, 
+  Filter,
+  ArrowUpRight,
+  Database,
+  Zap
+} from 'lucide-react';
+import { ACTIVITY_DATA } from '../mockData';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { AgentChip, agentColors } from '../components/shared/AgentChip';
+import { cn } from '../lib/utils';
+import { AgentRole } from '../types/agent';
+
+const activityEvents = [
+  { id: 1, type: 'success', title: 'Anomaly detection API', description: 'Deployed after 3 retries', agents: ['Developer', 'QA', 'CISO', 'DevOps'], time: '2h ago' },
+  { id: 2, type: 'error', title: 'Auth refactor', description: 'Escalated to human after 5 attempts', agents: ['Developer', 'QA', 'Critic'], time: '5h ago' },
+  { id: 3, type: 'warning', title: 'Payment webhook', description: 'CISO block resolved, deployed', agents: ['Developer', 'CISO', 'DevOps'], time: '8h ago' },
+  { id: 4, type: 'success', title: 'Rate limiter', description: 'Deployed first attempt', agents: ['Developer', 'QA', 'DevOps'], time: '1d ago' },
+  { id: 5, type: 'success', title: 'Notification service', description: 'Deployed after 1 retry', agents: ['Developer', 'QA', 'DevOps'], time: '1d ago' },
+  { id: 6, type: 'error', title: 'Data migration', description: 'Failed — rollback successful', agents: ['DevOps', 'Orchestrator'], time: '2d ago' },
+  { id: 7, type: 'success', title: 'User profile UI', description: 'Deployed first attempt', agents: ['Developer', 'QA'], time: '2d ago' },
+  { id: 8, type: 'warning', title: 'Search indexing', description: 'Performance threshold warning', agents: ['Developer', 'QA', 'DevOps'], time: '3d ago' },
+];
+
+export const Activity: React.FC = () => {
+  const [filter, setFilter] = useState('All');
+
+  return (
+    <div className="max-w-7xl mx-auto space-y-8">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: 'Tasks this week', value: '84', icon: Zap, color: 'text-indigo-400' },
+          { label: 'Avg retries', value: '1.2', icon: Clock, color: 'text-amber-400' },
+          { label: 'CISO blocks', value: '4', icon: Shield, color: 'text-orange-400' },
+          { label: 'Memory writes', value: '12', icon: Database, color: 'text-purple-400' },
+        ].map((stat, i) => (
+          <div key={i} className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl p-5">
+            <div className="flex justify-between items-start mb-2">
+              <span className="text-[10px] font-bold text-[#5A5A5A] uppercase tracking-wider">{stat.label}</span>
+              <stat.icon className={cn('w-4 h-4', stat.color)} />
+            </div>
+            <div className="text-2xl font-semibold text-[#F5F5F5]">{stat.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Chart Section */}
+      <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl p-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-[#F5F5F5]">Tasks per Day (Last 7 Days)</h2>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-indigo-500 rounded-sm" />
+              <span className="text-xs text-[#A0A0A0]">Completed</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-red-500 rounded-sm" />
+              <span className="text-xs text-[#A0A0A0]">Escalated</span>
+            </div>
+          </div>
+        </div>
+        <div className="h-[300px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={ACTIVITY_DATA}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#2A2A2A" vertical={false} />
+              <XAxis 
+                dataKey="day" 
+                axisLine={false} 
+                tickLine={false} 
+                tick={{ fill: '#5A5A5A', fontSize: 12 }} 
+                dy={10}
+              />
+              <YAxis 
+                axisLine={false} 
+                tickLine={false} 
+                tick={{ fill: '#5A5A5A', fontSize: 12 }} 
+              />
+              <Tooltip 
+                cursor={{ fill: '#242424' }}
+                contentStyle={{ backgroundColor: '#1A1A1A', border: '1px solid #2A2A2A', borderRadius: '8px' }}
+                itemStyle={{ fontSize: '12px' }}
+              />
+              <Bar dataKey="completed" stackId="a" fill="#6366F1" radius={[0, 0, 0, 0]} />
+              <Bar dataKey="escalated" stackId="a" fill="#EF4444" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Activity Feed */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-[#F5F5F5]">Activity Feed</h2>
+          <div className="flex gap-1 bg-[#1A1A1A] border border-[#2A2A2A] p-1 rounded-lg">
+            {['All', 'Completed', 'Failed', 'Escalated', 'Deployed'].map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={cn(
+                  'px-3 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all',
+                  filter === f 
+                    ? 'bg-[#242424] text-[#F5F5F5]' 
+                    : 'text-[#5A5A5A] hover:text-[#A0A0A0]'
+                )}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl divide-y divide-[#2A2A2A]">
+          {activityEvents.map((event) => (
+            <div key={event.id} className="p-4 flex items-center justify-between hover:bg-[#242424]/20 transition-colors group">
+              <div className="flex items-center gap-4">
+                <div className={cn(
+                  'w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
+                  event.type === 'success' && 'bg-green-500/10 text-green-400',
+                  event.type === 'error' && 'bg-red-500/10 text-red-400',
+                  event.type === 'warning' && 'bg-orange-500/10 text-orange-400',
+                )}>
+                  {event.type === 'success' && <CircleCheckBig className="w-4 h-4" />}
+                  {event.type === 'error' && <CircleX className="w-4 h-4" />}
+                  {event.type === 'warning' && <Shield className="w-4 h-4" />}
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-medium text-[#F5F5F5]">{event.title}</h3>
+                    <ArrowUpRight className="w-3 h-3 text-[#5A5A5A] opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                  <p className="text-xs text-[#A0A0A0]">{event.description}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-6">
+                <div className="flex gap-1.5">
+                  {event.agents.map((agent, i) => {
+                    const getAgentChipColors = (role: string) => {
+                      switch (role) {
+                        case 'Developer': return 'bg-indigo-500/20 text-indigo-300';
+                        case 'QA': return 'bg-teal-500/20 text-teal-300';
+                        case 'CISO': return 'bg-orange-500/20 text-orange-300';
+                        case 'DevOps': return 'bg-green-500/20 text-green-300';
+                        case 'Critic': return 'bg-purple-500/20 text-purple-300';
+                        default: return 'bg-gray-500/20 text-gray-300';
+                      }
+                    };
+                    const getAbbr = (role: string) => {
+                      if (role === 'Developer') return 'Dev';
+                      if (role === 'Orchestrator') return 'Orch';
+                      return role;
+                    };
+                    return (
+                      <div 
+                        key={i}
+                        className={cn("text-[10px] px-2 py-0.5 rounded-full font-medium", getAgentChipColors(agent))}
+                      >
+                        {getAbbr(agent)}
+                      </div>
+                    );
+                  })}
+                </div>
+                <span className="text-[10px] text-[#5A5A5A] font-mono w-16 text-right">{event.time}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+</file>
+
+<file path="frontend/src/pages/AgentLog.tsx">
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { 
+  ChevronRight, 
+  Terminal, 
+  Code, 
+  Settings, 
+  Database,
+  Search,
+  Maximize2,
+  Minimize2
+} from 'lucide-react';
+import { AGENT_CALLS } from '../mockData';
+import { AgentChip } from '../components/shared/AgentChip';
+import { cn } from '../lib/utils';
+import { AgentRole } from '../types/agent';
+
+export const AgentLog: React.FC = () => {
+  const { id } = useParams();
+  const [activeFilter, setActiveFilter] = useState<AgentRole | 'all'>('all');
+  const [expandedRow, setExpandedRow] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState<'prompt' | 'response' | 'tools'>('prompt');
+
+  const filters: (AgentRole | 'all')[] = ['all', 'Developer', 'QA', 'CISO', 'Orchestrator'];
+
+  return (
+    <div className="max-w-7xl mx-auto space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Link to={`/tasks/${id}`} className="text-[#5A5A5A] hover:text-[#A0A0A0] transition-colors">
+            <ChevronRight className="w-5 h-5 rotate-180" />
+          </Link>
+          <h1 className="text-xl font-semibold text-[#F5F5F5]">Agent Logs</h1>
+          <span className="text-xs font-mono text-[#5A5A5A]">{id}</span>
+        </div>
+        <div className="flex items-center gap-4 text-[10px] text-[#5A5A5A] font-mono">
+          <span className="flex items-center gap-1.5">
+            <Terminal className="w-3 h-3" /> 6 calls
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Database className="w-3 h-3" /> 14,200 tokens
+          </span>
+          <span className="flex items-center gap-1.5 text-indigo-400">
+            <Settings className="w-3 h-3" /> ~$0.43
+          </span>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between bg-[#1A1A1A] border border-[#2A2A2A] p-2 rounded-xl">
+        <div className="flex gap-1">
+          {filters.map((f) => (
+            <button
+              key={f}
+              onClick={() => setActiveFilter(f)}
+              className={cn(
+                'px-3 py-1.5 rounded-lg text-xs font-medium transition-all',
+                activeFilter === f 
+                  ? 'bg-indigo-600 text-white' 
+                  : 'text-[#A0A0A0] hover:text-[#F5F5F5] hover:bg-[#242424]'
+              )}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
+        <div className="relative">
+          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#5A5A5A]" />
+          <input 
+            type="text" 
+            placeholder="Search logs..."
+            className="bg-[#0F0F0F] border border-[#2A2A2A] rounded-lg pl-9 pr-3 py-1.5 text-xs outline-none focus:border-indigo-500 w-48"
+          />
+        </div>
+      </div>
+
+      <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl overflow-hidden">
+        <table className="w-full text-xs text-left">
+          <thead className="bg-[#242424]/50 text-[#5A5A5A] border-b border-[#2A2A2A]">
+            <tr>
+              <th className="px-6 py-4 font-medium w-12">#</th>
+              <th className="px-6 py-4 font-medium">Agent</th>
+              <th className="px-6 py-4 font-medium">Action</th>
+              <th className="px-6 py-4 font-medium">Tokens</th>
+              <th className="px-6 py-4 font-medium">Latency</th>
+              <th className="px-6 py-4 font-medium">Timestamp</th>
+              <th className="px-6 py-4 font-medium text-right">Details</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#2A2A2A]">
+            {AGENT_CALLS.filter(c => activeFilter === 'all' || c.agent === activeFilter).map((call) => (
+              <React.Fragment key={call.id}>
+                <tr 
+                  className={cn(
+                    'hover:bg-[#242424]/20 transition-colors cursor-pointer',
+                    expandedRow === call.id && 'bg-[#242424]/40'
+                  )}
+                  onClick={() => setExpandedRow(expandedRow === call.id ? null : call.id)}
+                >
+                  <td className="px-6 py-4 font-mono text-[#5A5A5A]">{call.id}</td>
+                  <td className="px-6 py-4">
+                    <AgentChip role={call.agent as AgentRole} />
+                  </td>
+                  <td className="px-6 py-4 font-mono text-indigo-300">{call.action}</td>
+                  <td className="px-6 py-4 text-[#A0A0A0]">{call.tokens.toLocaleString()}</td>
+                  <td className="px-6 py-4 text-[#A0A0A0]">{call.latency}</td>
+                  <td className="px-6 py-4 text-[#5A5A5A]">{call.timestamp}</td>
+                  <td className="px-6 py-4 text-right">
+                    <button className="text-[#5A5A5A] hover:text-[#A0A0A0]">
+                      {expandedRow === call.id ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                    </button>
+                  </td>
+                </tr>
+                {expandedRow === call.id && (
+                  <tr>
+                    <td colSpan={7} className="px-6 py-6 bg-[#0F0F0F]/50">
+                      <div className="space-y-4">
+                        <div className="flex gap-4 border-b border-[#2A2A2A]">
+                          {['prompt', 'response', 'tools'].map((tab) => (
+                            <button
+                              key={tab}
+                              onClick={(e) => { e.stopPropagation(); setActiveTab(tab as any); }}
+                              className={cn(
+                                'pb-2 text-[10px] font-bold uppercase tracking-wider transition-all border-b-2',
+                                activeTab === tab 
+                                  ? 'border-indigo-500 text-indigo-400' 
+                                  : 'border-transparent text-[#5A5A5A] hover:text-[#A0A0A0]'
+                              )}
+                            >
+                              {tab}
+                            </button>
+                          ))}
+                        </div>
+                        
+                        <div className="bg-[#0F0F0F] border border-[#2A2A2A] rounded-lg p-4 font-mono text-[11px] leading-relaxed overflow-x-auto max-h-[400px]">
+                          {activeTab === 'prompt' && (
+                            <div className="text-indigo-200/80">
+                              <span className="text-indigo-400 font-bold">SYSTEM:</span> You are a senior software engineer...<br/>
+                              <span className="text-indigo-400 font-bold">USER:</span> Fix the NullPointerException in anomaly.py:42...<br/>
+                              <span className="text-indigo-400 font-bold">CONTEXT:</span> [Memory M1, M2 loaded]
+                            </div>
+                          )}
+                          {activeTab === 'response' && (
+                            <div className="text-green-200/80">
+                              I have analyzed the error. The IsolationForest model requires at least 2 samples...<br/>
+                              <span className="text-green-400 font-bold">THOUGHT:</span> Applying null guard and z-score fallback...<br/>
+                              <span className="text-green-400 font-bold">ACTION:</span> write_file("anomaly.py", ...)
+                            </div>
+                          )}
+                          {activeTab === 'tools' && (
+                            <div className="space-y-4">
+                              <div className="space-y-1">
+                                <div className="text-amber-400 font-bold">TOOL: write_file</div>
+                                <div className="text-[#A0A0A0]">params: {"{ \"path\": \"anomaly.py\", \"content\": \"...\" }"}</div>
+                                <div className="text-green-400">result: {"{ \"status\": \"success\", \"bytes\": 4200 }"}</div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+</file>
+
+<file path="frontend/src/pages/Auth.tsx">
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+import React, { useEffect, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
+import { useAuthStore } from '../store/authStore';
+import { useGitHubStore } from '../store/githubStore';
+
+const getErrorMessage = (error: unknown, fallback: string) =>
+  error instanceof Error ? error.message : fallback;
+
+export const Auth: React.FC = () => {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const exchangeCode = useAuthStore((state) => state.exchangeCode);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const authError = useAuthStore((state) => state.error);
+  const fetchRepositories = useGitHubStore((state) => state.fetchRepositories);
+
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const processedCodeRef = useRef<string | null>(null);
+  const redirectTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (redirectTimerRef.current !== null) {
+        window.clearTimeout(redirectTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const code = searchParams.get('code');
+    const errorParam = searchParams.get('error');
+
+    if (errorParam) {
+      setError(`GitHub OAuth error: ${errorParam}`);
+      return;
+    }
+
+    if (!code) {
+      setError('Missing GitHub authorization code.');
+      return;
+    }
+
+    if (processedCodeRef.current === code) {
+      return;
+    }
+
+    processedCodeRef.current = code;
+
+    const handleCodeExchange = async () => {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        await exchangeCode(code);
+        await fetchRepositories();
+
+        redirectTimerRef.current = window.setTimeout(() => {
+          navigate('/dashboard', { replace: true });
+        }, 1500);
+      } catch (exchangeError) {
+        setError(getErrorMessage(exchangeError, 'Failed to authenticate with GitHub'));
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    void handleCodeExchange();
+  }, [exchangeCode, fetchRepositories, navigate, searchParams]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#0F0F0F] flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-[#1A1A1A] border border-[#2A2A2A] rounded-2xl p-8 text-center space-y-6">
+          <Loader2 className="w-12 h-12 text-indigo-500 animate-spin mx-auto" />
+          <div className="space-y-2">
+            <h2 className="text-xl font-bold text-[#F5F5F5]">Connecting to GitHub</h2>
+            <p className="text-[#A0A0A0] text-sm">
+              Please wait while we authenticate your account...
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || authError) {
+    return (
+      <div className="min-h-screen bg-[#0F0F0F] flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-[#1A1A1A] border border-[#2A2A2A] rounded-2xl p-8 text-center space-y-6">
+          <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto">
+            <AlertCircle className="w-8 h-8 text-red-500" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-bold text-[#F5F5F5]">Authentication Failed</h2>
+            <p className="text-red-400 text-sm">{error || authError}</p>
+          </div>
+          <button
+            onClick={() => navigate('/login', { replace: true })}
+            className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-xl text-sm font-medium transition-all"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-[#0F0F0F] flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-[#1A1A1A] border border-[#2A2A2A] rounded-2xl p-8 text-center space-y-6">
+          <div className="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center mx-auto">
+            <CheckCircle className="w-8 h-8 text-green-500" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-bold text-[#F5F5F5]">Authentication Successful!</h2>
+            <p className="text-[#A0A0A0] text-sm">Loading your repositories...</p>
+            <p className="text-[#A0A0A0] text-sm">Redirecting to dashboard...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+};
+</file>
+
+<file path="frontend/src/pages/Dashboard.tsx">
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState } from 'react';
+import { Plus, Activity, Database, Cpu, DollarSign, CircleAlert } from 'lucide-react';
+import { MOCK_TASKS } from '../mockData';
+import { StatusBadge } from '../components/shared/StatusBadge';
+import { AgentChip } from '../components/shared/AgentChip';
+import { Link } from 'react-router-dom';
+import { cn } from '../lib/utils';
+import { TaskCreateModal, TaskFormData } from '../components/tasks/TaskCreateModal';
+
+export const Dashboard: React.FC = () => {
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
+  const handleCreateTask = async (taskData: TaskFormData) => {
+    console.log('Creating task:', taskData);
+    // TODO: Call backend API to create task
+    // const response = await fetch(`${BACKEND_URL}/tasks`, {
+    //   method: 'POST',
+    //   headers: {
+    //     'Content-Type': 'application/json',
+    //     'Authorization': `Bearer ${useAuthStore.getState().accessToken}`
+    //   },
+    //   body: JSON.stringify(taskData)
+    // });
+  };
+
+  return (
+    <div className="max-w-7xl mx-auto space-y-8">
+      {/* Submit Bar */}
+      <section className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl p-4 shadow-xl">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="flex-1 bg-[#0F0F0F] border border-[#2A2A2A] rounded-lg px-4 py-3 text-sm text-left text-[#5A5A5A] hover:border-indigo-500/50 hover:text-[#A0A0A0] transition-all"
+          >
+            Describe a task for your AI team...
+          </button>
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-6 py-3 text-sm font-medium transition-all flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            New Task
+          </button>
+        </div>
+      </section>
+
+      {/* Task Create Modal */}
+      <TaskCreateModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onSubmit={handleCreateTask}
+      />
+
+      {/* Stats Row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: 'Active tasks', value: '3', subtitle: 'running now', icon: Cpu, color: 'text-blue-400' },
+          { label: 'Completed today', value: '12', subtitle: 'since midnight', icon: Activity, color: 'text-green-400' },
+          { label: 'Avg retries', value: '1.4', subtitle: 'per task', icon: Database, color: 'text-amber-400' },
+          { label: 'Escalations', value: '2', subtitle: 'awaiting you', icon: CircleAlert, color: 'text-red-400', alert: true },
+        ].map((stat, i) => (
+          <div key={i} className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl p-5">
+            <div className="flex justify-between items-start mb-2">
+              <span className="text-xs font-medium text-[#A0A0A0] uppercase tracking-wider">{stat.label}</span>
+              <stat.icon className={cn('w-4 h-4', stat.color)} />
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className={cn('text-2xl font-semibold', stat.alert ? 'text-red-400' : 'text-[#F5F5F5]')}>
+                {stat.value}
+              </span>
+              <span className="text-[10px] text-[#5A5A5A]">{stat.subtitle}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Task Grid */}
+        <div className="lg:col-span-2 space-y-4">
+          <h2 className="text-sm font-semibold text-[#F5F5F5] flex items-center gap-2">
+            Active Tasks
+            <span className="bg-[#242424] text-[#A0A0A0] text-[10px] px-1.5 py-0.5 rounded">3</span>
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {MOCK_TASKS.map((task) => (
+              <Link 
+                key={task.id} 
+                to={`/tasks/${task.id}`}
+                className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl p-5 hover:border-[#383838] transition-all group"
+              >
+                <div className="flex justify-between items-start mb-4">
+                  <div className="space-y-1">
+                    <h3 
+                      className="text-sm font-medium text-[#F5F5F5] line-clamp-1 group-hover:text-indigo-400 transition-colors"
+                      title={task.title}
+                    >
+                      {task.title}
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono text-[#5A5A5A]">{task.id}</span>
+                      <span className="text-[10px] text-[#5A5A5A]">•</span>
+                      <span className="text-[10px] text-[#5A5A5A]">{task.timeElapsed}</span>
+                    </div>
+                  </div>
+                  <StatusBadge status={task.status} />
+                </div>
+
+                <div className="flex items-center justify-between mb-4">
+                  <AgentChip role={task.currentAgent} />
+                  {task.status === 'retrying' && (
+                    <span className="text-[10px] font-medium text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
+                      Attempt {task.retryCount} of {task.maxRetries}
+                    </span>
+                  )}
+                  {task.prNumber && (
+                    <span className="text-[10px] font-medium text-blue-400 hover:underline">
+                      #{task.prNumber} open
+                    </span>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-[10px] text-[#5A5A5A]">
+                    <span>Progress</span>
+                    <span>{task.progress}%</span>
+                  </div>
+                  <div className="w-full h-1 bg-[#0F0F0F] rounded-full overflow-hidden">
+                    <div 
+                      className={cn(
+                        "h-full transition-all duration-500",
+                        task.status === 'deployed' ? 'bg-green-500' :
+                        task.status === 'failed' ? 'bg-red-500' :
+                        task.status === 'retrying' ? 'bg-amber-500' :
+                        task.status === 'blocked' ? 'bg-orange-500' :
+                        task.status === 'escalated' ? 'bg-red-600' :
+                        'bg-indigo-500'
+                      )}
+                      style={{ width: `${task.progress}%` }} 
+                    />
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        {/* System Health Sidebar */}
+        <div className="space-y-6">
+          <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl p-6">
+            <h2 className="text-sm font-semibold text-[#F5F5F5] mb-6 flex items-center gap-2">
+              System Health
+              <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+            </h2>
+            
+            <div className="space-y-6">
+              <div className="space-y-3">
+                <span className="text-[10px] font-medium text-[#5A5A5A] uppercase tracking-wider">Agent Status</span>
+                <div className="space-y-2.5">
+                  {['Developer', 'QA', 'CISO', 'DevOps'].map((role) => (
+                    <div key={role} className="flex items-center justify-between">
+                      <span className="text-xs text-[#A0A0A0]">{role}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-[#5A5A5A]">ready</span>
+                        <div className="w-1.5 h-1.5 bg-green-500 rounded-full" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pt-6 border-t border-[#2A2A2A] space-y-4">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <Activity className="w-3.5 h-3.5 text-[#5A5A5A]" />
+                    <span className="text-xs text-[#A0A0A0]">Queue depth</span>
+                  </div>
+                  <span className="text-xs font-medium text-[#F5F5F5]">3 tasks pending</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <Database className="w-3.5 h-3.5 text-[#5A5A5A]" />
+                    <span className="text-xs text-[#A0A0A0]">Memory hits</span>
+                  </div>
+                  <span className="text-xs font-medium text-[#F5F5F5]">14 retrievals</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <DollarSign className="w-3.5 h-3.5 text-[#5A5A5A]" />
+                    <span className="text-xs text-[#A0A0A0]">LLM cost</span>
+                  </div>
+                  <span className="text-xs font-medium text-[#F5F5F5]">$2.30 today</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+</file>
+
+<file path="frontend/src/pages/ErrorPage.tsx">
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React from 'react';
+import { useRouteError, isRouteErrorResponse, Link } from 'react-router-dom';
+import { AlertCircle, Home } from 'lucide-react';
+
+export const ErrorPage: React.FC = () => {
+  const error = useRouteError();
+  let errorMessage: string;
+
+  if (isRouteErrorResponse(error)) {
+    errorMessage = error.statusText || error.data?.message || 'Page not found';
+  } else if (error instanceof Error) {
+    errorMessage = error.message;
+  } else if (typeof error === 'string') {
+    errorMessage = error;
+  } else {
+    console.error(error);
+    errorMessage = 'Unknown error';
+  }
+
+  return (
+    <div className="min-h-screen bg-[#0F0F0F] flex items-center justify-center p-4">
+      <div className="max-w-md w-full bg-[#1A1A1A] border border-[#2A2A2A] rounded-2xl p-8 text-center space-y-6 shadow-2xl">
+        <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto">
+          <AlertCircle className="w-8 h-8 text-red-500" />
+        </div>
+        <div className="space-y-2">
+          <h1 className="text-2xl font-bold text-[#F5F5F5]">Oops! Something went wrong</h1>
+          <p className="text-[#A0A0A0] text-sm">{errorMessage}</p>
+        </div>
+        <Link 
+          to="/dashboard" 
+          className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-xl text-sm font-medium transition-all shadow-lg shadow-indigo-600/20"
+        >
+          <Home className="w-4 h-4" />
+          Back to Dashboard
+        </Link>
+      </div>
+    </div>
+  );
+};
+</file>
+
+<file path="frontend/src/pages/Inbox.tsx">
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React from 'react';
+import { AlertCircle, Shield, ChevronDown, Play, XCircle, Info, Brain } from 'lucide-react';
+import { MOCK_ESCALATIONS, MOCK_TASKS } from '../mockData';
+import { cn } from '../lib/utils';
+
+export const Inbox: React.FC = () => {
+  const attemptHistory = [
+    "NullPointerException at anomaly.py:42",
+    "IndexError: empty series input",
+    "single-point series — IsolationForest needs n_samples ≥ 2",
+    "Critic fix applied — score inversion resolved",
+    "AssertionError: normaliser clipping values to 0 — max retries hit"
+  ];
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-8">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-semibold text-[#F5F5F5]">Escalation Inbox</h1>
+          <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">
+            2 awaiting
+          </span>
+        </div>
+      </div>
+
+      <div className="space-y-6">
+        {MOCK_ESCALATIONS.map((esc) => {
+          const task = MOCK_TASKS.find(t => t.id === esc.taskId);
+          const isSecurity = esc.type === 'security_block';
+
+          return (
+            <div 
+              key={esc.id} 
+              className={cn(
+                'bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl overflow-hidden shadow-xl flex',
+                isSecurity ? 'border-l-4 border-l-orange-500 pb-6' : 'border-l-4 border-l-red-500'
+              )}
+            >
+              <div className="p-8 flex-1 space-y-6">
+                <div className="flex justify-between items-start">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono text-[#5A5A5A]">{esc.taskId}</span>
+                      <span className="text-[10px] text-[#5A5A5A]">•</span>
+                      <span className="text-[10px] text-[#5A5A5A]">2 hours ago</span>
+                    </div>
+                    <h2 className="text-lg font-semibold text-[#F5F5F5]">{task?.title}</h2>
+                    <div className="flex items-center gap-2">
+                      {isSecurity ? (
+                        <Shield className="w-3.5 h-3.5 text-orange-400" />
+                      ) : (
+                        <AlertCircle className="w-3.5 h-3.5 text-red-400" />
+                      )}
+                      <span className={cn(
+                        'text-xs font-medium',
+                        isSecurity ? 'text-orange-400' : 'text-red-400'
+                      )}>
+                        {esc.reason}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {esc.recommendation && (
+                  <div className="bg-purple-500/10 border border-purple-500/20 rounded-lg p-4 space-y-2">
+                    <div className="flex items-center gap-2 text-purple-400">
+                      <Brain className="w-4 h-4" />
+                      <span className="text-xs font-bold uppercase tracking-wider">Critic Recommendation</span>
+                    </div>
+                    <p className="text-sm text-purple-200/80 leading-relaxed">
+                      {esc.recommendation}
+                    </p>
+                  </div>
+                )}
+
+                {esc.findings && (
+                  <div className="space-y-4">
+                    <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-4 space-y-2">
+                      <div className="flex items-center gap-2 text-orange-400">
+                        <Shield className="w-4 h-4" />
+                        <span className="text-xs font-bold uppercase tracking-wider">CISO Findings</span>
+                      </div>
+                      <p className="text-sm text-orange-200/80 leading-relaxed font-mono">
+                        {esc.findings}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 text-[#A0A0A0] text-xs bg-[#242424]/50 p-3 rounded-lg">
+                      <Info className="w-4 h-4 text-indigo-400" />
+                      System is handling this automatically — no action required.
+                    </div>
+                  </div>
+                )}
+
+                {!isSecurity && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between text-[10px] text-[#5A5A5A] uppercase tracking-wider font-bold">
+                      <span>Attempt History</span>
+                      <ChevronDown className="w-3 h-3" />
+                    </div>
+                    <div className="space-y-2">
+                      {attemptHistory.map((errorMsg, i) => (
+                        <div key={i} className="flex items-center justify-between text-xs py-1 border-b border-[#2A2A2A]/50">
+                          <span className="text-[#A0A0A0]">Attempt {i + 1}</span>
+                          <span className="text-red-400/70 font-mono text-right">{errorMsg}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="pt-4 space-y-4">
+                  {!isSecurity ? (
+                    <>
+                      <textarea 
+                        placeholder="Type an instruction to inject..."
+                        className="w-full bg-[#0F0F0F] border border-[#2A2A2A] rounded-lg p-4 text-sm text-[#F5F5F5] focus:border-indigo-500 outline-none min-h-[100px] resize-none"
+                      />
+                      <div className="flex gap-3">
+                        <button className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg py-3 text-sm font-medium transition-all flex items-center justify-center gap-2">
+                          <Play className="w-4 h-4" />
+                          Resume with instruction
+                        </button>
+                        <button className="px-6 bg-transparent border border-[#2A2A2A] hover:border-red-500/50 hover:text-red-400 text-[#A0A0A0] rounded-lg py-3 text-sm font-medium transition-all">
+                          Reject task
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex items-center justify-between bg-[#242424]/50 rounded-lg p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
+                        <span className="text-sm text-[#A0A0A0]">Dev agent is already applying fix...</span>
+                      </div>
+                      <button className="text-xs font-medium text-red-400 hover:text-red-300 flex items-center gap-1.5">
+                        <XCircle className="w-3.5 h-3.5" />
+                        Force abort
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+</file>
+
+<file path="frontend/src/pages/Login.tsx">
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+import React from 'react';
+import { Navigate } from 'react-router-dom';
+import { CheckCircle, GitBranch, Github, Lock, Terminal } from 'lucide-react';
+import { useAuthStore } from '../store/authStore';
+
+export const Login: React.FC = () => {
+  const initiateGitHubLogin = useAuthStore((state) => state.initiateGitHubLogin);
+  const error = useAuthStore((state) => state.error);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const hasHydrated = useAuthStore((state) => state.hasHydrated);
+
+  const features = [
+    { icon: Lock, text: 'Secure OAuth 2.0 authentication' },
+    { icon: GitBranch, text: 'Access to your repositories and branches' },
+    { icon: CheckCircle, text: 'Select repo & branch per task' },
+    { icon: Terminal, text: 'AI-powered task automation' },
+  ];
+
+  if (hasHydrated && isAuthenticated) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return (
+    <div className="min-h-screen bg-[#0F0F0F] flex items-center justify-center p-4">
+      <div className="max-w-md w-full space-y-8">
+        <div className="text-center space-y-4">
+          <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto shadow-xl shadow-indigo-500/20">
+            <Terminal className="text-white w-8 h-8" />
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-3xl font-bold text-[#F5F5F5]">Welcome to Conductor</h1>
+            <p className="text-[#A0A0A0] text-sm">
+              AI-driven software development automation
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-2xl p-8 space-y-6 shadow-xl">
+          <div className="space-y-4">
+            <h2 className="text-lg font-semibold text-[#F5F5F5]">Connect Your GitHub Account</h2>
+            <p className="text-sm text-[#A0A0A0] leading-relaxed">
+              To use Conductor, you need to connect your GitHub account. This allows our AI
+              agents to access and manage your repositories.
+            </p>
+          </div>
+
+          <div className="space-y-3 py-4 border-y border-[#2A2A2A]">
+            {features.map((feature, index) => (
+              <div key={index} className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-[#242424] rounded-lg flex items-center justify-center">
+                  <feature.icon className="w-4 h-4 text-indigo-400" />
+                </div>
+                <span className="text-sm text-[#A0A0A0]">{feature.text}</span>
+              </div>
+            ))}
+          </div>
+
+          <button
+            onClick={initiateGitHubLogin}
+            className="w-full bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl px-6 py-4 text-sm font-medium transition-all flex items-center justify-center gap-3 shadow-lg shadow-indigo-500/20"
+          >
+            <Github className="w-5 h-5" />
+            Continue with GitHub
+          </button>
+
+          {error && (
+            <p className="text-xs text-red-400 text-center leading-relaxed">
+              {error}
+            </p>
+          )}
+
+          <p className="text-xs text-[#5A5A5A] text-center leading-relaxed">
+            By connecting, you agree to allow Conductor access to your repositories. You can
+            revoke access anytime from your GitHub settings.
+          </p>
+        </div>
+
+        <div className="text-center space-y-2">
+          <p className="text-xs text-[#5A5A5A]">
+            Powered by open-source AI models - 100% private
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
+</file>
+
+<file path="frontend/src/pages/MemoryExplorer.tsx">
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState } from 'react';
+import { Search, Brain, Trash2, Plus, TrendingUp, Tag } from 'lucide-react';
+import { MOCK_MEMORIES } from '../mockData';
+import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
+import { cn } from '../lib/utils';
+
+const memoryGrowthData = [
+  { day: 'Mon', count: 38 },
+  { day: 'Tue', count: 40 },
+  { day: 'Wed', count: 42 },
+  { day: 'Thu', count: 42 },
+  { day: 'Fri', count: 45 },
+  { day: 'Sat', count: 46 },
+  { day: 'Sun', count: 47 },
+];
+
+export const MemoryExplorer: React.FC = () => {
+  const [memories, setMemories] = useState(MOCK_MEMORIES);
+
+  const handleDelete = (id: string) => {
+    setMemories(memories.filter(m => m.id !== id));
+  };
+
+  return (
+    <div className="max-w-7xl mx-auto space-y-8">
+      <div className="flex items-center gap-4 bg-[#1A1A1A] border border-[#2A2A2A] p-4 rounded-xl shadow-xl">
+        <div className="flex-1 relative">
+          <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-[#5A5A5A]" />
+          <input 
+            type="text" 
+            placeholder="Search memory semantically..."
+            className="w-full bg-[#0F0F0F] border border-[#2A2A2A] rounded-lg pl-12 pr-4 py-3 text-sm focus:border-indigo-500 outline-none transition-all"
+          />
+        </div>
+        <button className="bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-8 py-3 text-sm font-medium transition-colors">
+          Search
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Memory List */}
+        <div className="lg:col-span-2 space-y-4">
+          <h2 className="text-sm font-semibold text-[#F5F5F5] flex items-center gap-2">
+            Recent Memory Entries
+            <span className="bg-[#242424] text-[#A0A0A0] text-[10px] px-1.5 py-0.5 rounded">{memories.length}</span>
+          </h2>
+          <div className="space-y-3">
+            {memories.map((memory) => (
+              <div key={memory.id} className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl p-5 hover:border-[#383838] transition-all group">
+                <div className="flex justify-between items-start gap-4">
+                  <div className="flex-1 space-y-3">
+                    <p className="text-sm text-[#F5F5F5] leading-relaxed">{memory.content}</p>
+                    <div className="flex items-center gap-4">
+                      <div className="flex gap-1.5">
+                        {memory.tags.map(tag => (
+                          <span key={tag} className="text-[10px] bg-[#242424] text-[#A0A0A0] px-2 py-0.5 rounded-md border border-[#2A2A2A]">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                      <span className="text-[10px] font-mono text-[#5A5A5A]">{memory.sourceTaskId}</span>
+                      <span className="text-[10px] text-[#5A5A5A]">{memory.date}</span>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => handleDelete(memory.id)}
+                    className="text-[#5A5A5A] hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Stats Panel */}
+        <div className="space-y-6">
+          <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl p-6 space-y-8">
+            <div className="space-y-6">
+              <div className="space-y-1">
+                <span className="text-[10px] text-[#5A5A5A] uppercase tracking-wider font-bold">Total Memories</span>
+                <div className="text-3xl font-semibold text-[#F5F5F5]">47</div>
+              </div>
+
+              <div className="space-y-3">
+                <span className="text-[10px] text-[#5A5A5A] uppercase tracking-wider font-bold">Most Reused</span>
+                <div className="bg-[#0F0F0F] border border-[#2A2A2A] rounded-lg p-3 space-y-2">
+                  <p className="text-xs text-[#A0A0A0] leading-tight">"IsolationForest requires n_samples ≥ 2"</p>
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="w-3 h-3 text-green-400" />
+                    <span className="text-[10px] text-green-400 font-bold">Used 3 times</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <span className="text-[10px] text-[#5A5A5A] uppercase tracking-wider font-bold">Growth (7d)</span>
+                <div className="h-[120px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={memoryGrowthData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#2A2A2A" vertical={false} />
+                      <XAxis 
+                        dataKey="day" 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{ fill: '#5A5A5A', fontSize: 10 }} 
+                        dy={10}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="count" 
+                        stroke="#6366F1" 
+                        strokeWidth={2} 
+                        dot={false} 
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <span className="text-[10px] text-[#5A5A5A] uppercase tracking-wider font-bold">Top Tags</span>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { name: 'python', count: 12 },
+                    { name: 'security', count: 8 },
+                    { name: 'performance', count: 7 },
+                    { name: 'ml', count: 6 },
+                  ].map((tag) => (
+                    <div key={tag.name} className="flex items-center gap-1.5 bg-[#242424] border border-[#2A2A2A] px-2 py-1 rounded-md">
+                      <Tag className="w-3 h-3 text-[#5A5A5A]" />
+                      <span className="text-xs text-[#A0A0A0]">{tag.name}</span>
+                      <span className="text-[10px] text-[#5A5A5A] font-mono">×{tag.count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <button className="w-full bg-transparent border border-[#2A2A2A] hover:border-[#383838] text-[#A0A0A0] rounded-lg py-3 text-sm font-medium transition-all flex items-center justify-center gap-2">
+              <Plus className="w-4 h-4" />
+              Add memory manually
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+</file>
+
+<file path="frontend/src/pages/TaskDetail.tsx">
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { 
+  ChevronDown, 
+  ChevronRight, 
+  Clock, 
+  ExternalLink, 
+  GitBranch, 
+  GitCommit, 
+  Github, 
+  Shield, 
+  Brain,
+  Play
+} from 'lucide-react';
+import { MOCK_TASKS, MOCK_EVENTS, MOCK_QA_RESULT, MOCK_MEMORIES } from '../mockData';
+import { StatusBadge } from '../components/shared/StatusBadge';
+import { AgentChip, agentColors } from '../components/shared/AgentChip';
+import { cn } from '../lib/utils';
+
+export const TaskDetail: React.FC = () => {
+  const { id } = useParams();
+  const task = MOCK_TASKS.find(t => t.id === id) || MOCK_TASKS[0];
+  const [expandedEvents, setExpandedEvents] = useState<string[]>([]);
+  const [qaExpanded, setQaExpanded] = useState(true);
+
+  const toggleEvent = (eventId: string) => {
+    setExpandedEvents(prev => 
+      prev.includes(eventId) ? prev.filter(i => i !== eventId) : [...prev, eventId]
+    );
+  };
+
+  const barColor = (failed: number) => failed > 0 ? 'bg-red-500' : 'bg-green-500';
+  const canDeploy = task.status === ('awaiting_deploy' as any);
+
+  return (
+    <div className="max-w-7xl mx-auto">
+      <div className="flex items-center gap-4 mb-8">
+        <Link to="/dashboard" className="text-[#5A5A5A] hover:text-[#A0A0A0] transition-colors">
+          <ChevronRight className="w-5 h-5 rotate-180" />
+        </Link>
+        <h1 className="text-xl font-semibold text-[#F5F5F5]">{task.title}</h1>
+        <StatusBadge status={task.status} />
+        <AgentChip role={task.currentAgent} />
+        {task.status === 'retrying' && (
+          <span className="text-[10px] font-medium text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
+            Attempt {task.retryCount} of {task.maxRetries}
+          </span>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-10 gap-8">
+        {/* Left Side - Live Feed */}
+        <div className="lg:col-span-6 space-y-6">
+          <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl overflow-hidden flex flex-col h-[600px]">
+            <div className="p-4 border-b border-[#2A2A2A] bg-[#242424]/30 flex justify-between items-center">
+              <span className="text-xs font-medium text-[#A0A0A0] uppercase tracking-wider">Live Feed</span>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse" />
+                <span className="text-[10px] text-indigo-400 font-medium uppercase">Live</span>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 font-mono">
+              {MOCK_EVENTS.map((event) => (
+                <div key={event.id} className="group">
+                  <div className="flex items-start gap-3 text-xs">
+                    <div 
+                      className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" 
+                      style={{ backgroundColor: agentColors[event.agent] }} 
+                    />
+                    <div className="flex-1 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span style={{ color: agentColors[event.agent] }} className="font-bold">
+                          [{event.agent}]
+                        </span>
+                        <span className="text-[#5A5A5A] text-[10px]">{event.timestamp}</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <p className={cn(
+                          'text-[#A0A0A0] leading-relaxed',
+                          event.type === 'error' && 'text-red-400'
+                        )}>
+                          {event.description}
+                        </p>
+                        {event.payload && (
+                          <button 
+                            onClick={() => toggleEvent(event.id)}
+                            className="text-[#5A5A5A] hover:text-[#A0A0A0] mt-0.5"
+                          >
+                            {expandedEvents.includes(event.id) ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                          </button>
+                        )}
+                      </div>
+                      {expandedEvents.includes(event.id) && event.payload && (
+                        <pre className="mt-2 p-3 bg-[#0F0F0F] border border-[#2A2A2A] rounded-lg text-[10px] text-indigo-300 overflow-x-auto">
+                          {JSON.stringify(event.payload, null, 2)}
+                        </pre>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <div className="flex items-center gap-3 text-xs animate-pulse">
+                <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full" />
+                <span className="text-indigo-400 font-medium">Agent working...</span>
+              </div>
+            </div>
+          </div>
+
+          {/* QA Panel */}
+          <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl overflow-hidden">
+            <button 
+              onClick={() => setQaExpanded(!qaExpanded)}
+              className="w-full p-4 flex items-center justify-between hover:bg-[#242424]/30 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <Shield className="w-4 h-4 text-teal-400" />
+                <span className="text-sm font-semibold">QA result — attempt {MOCK_QA_RESULT.attempt}</span>
+                <StatusBadge status="failed" className="bg-red-500/10 text-red-400" />
+              </div>
+              {qaExpanded ? <ChevronDown className="w-4 h-4 text-[#5A5A5A]" /> : <ChevronRight className="w-4 h-4 text-[#5A5A5A]" />}
+            </button>
+
+            {qaExpanded && (
+              <div className="p-6 border-t border-[#2A2A2A] space-y-8">
+                <div className="grid grid-cols-2 gap-8">
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-end">
+                      <span className="text-xs text-[#A0A0A0]">Unit Tests</span>
+                      <span className="text-xs font-mono text-[#F5F5F5]">
+                        <span className="text-green-400">{MOCK_QA_RESULT.unitTests.pass}</span>
+                        <span className="text-[#5A5A5A]"> / </span>
+                        <span className="text-red-400">{MOCK_QA_RESULT.unitTests.fail}</span>
+                      </span>
+                    </div>
+                    <div className="h-1.5 bg-[#0F0F0F] rounded-full flex overflow-hidden">
+                      <div className={cn("h-full", barColor(MOCK_QA_RESULT.unitTests.fail))} style={{ width: '100%' }} />
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-end">
+                      <span className="text-xs text-[#A0A0A0]">Integration Tests</span>
+                      <span className="text-xs font-mono text-[#F5F5F5]">
+                        <span className="text-green-400">{MOCK_QA_RESULT.integrationTests.pass}</span>
+                        <span className="text-[#5A5A5A]"> / </span>
+                        <span className="text-red-400">{MOCK_QA_RESULT.integrationTests.fail}</span>
+                      </span>
+                    </div>
+                    <div className="h-1.5 bg-[#0F0F0F] rounded-full flex overflow-hidden">
+                      <div className={cn("h-full", barColor(MOCK_QA_RESULT.integrationTests.fail))} style={{ width: '100%' }} />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-8">
+                  <div className="space-y-2">
+                    <span className="text-[10px] text-[#5A5A5A] uppercase tracking-wider">Coverage</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl font-semibold text-amber-400">{MOCK_QA_RESULT.coverage}%</span>
+                      <span className="text-[10px] text-amber-400/60 font-medium">Below 85% threshold</span>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <span className="text-[10px] text-[#5A5A5A] uppercase tracking-wider">Latency</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl font-semibold text-green-400">{MOCK_QA_RESULT.latency}</span>
+                      <span className="text-[10px] text-green-400/60 font-medium">p95 target met</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <span className="text-[10px] text-[#5A5A5A] uppercase tracking-wider">Failures</span>
+                  <div className="border border-[#2A2A2A] rounded-lg overflow-hidden">
+                    <table className="w-full text-xs text-left">
+                      <thead className="bg-[#242424]/50 text-[#5A5A5A]">
+                        <tr>
+                          <th className="px-4 py-2 font-medium">Test Name</th>
+                          <th className="px-4 py-2 font-medium">Severity</th>
+                          <th className="px-4 py-2 font-medium">Location</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#2A2A2A]">
+                        {MOCK_QA_RESULT.failures.map((fail, i) => (
+                          <tr key={i} className="hover:bg-[#242424]/20">
+                            <td className="px-4 py-3">
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-[#F5F5F5] font-medium">{fail.name}</span>
+                                <span className="text-red-400 text-[10px] font-mono">{fail.error}</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={cn(
+                                'px-1.5 py-0.5 rounded text-[9px] font-bold uppercase',
+                                fail.severity === 'high' ? 'bg-red-500/10 text-red-400' : 'bg-amber-500/10 text-amber-400'
+                              )}>
+                                {fail.severity}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-[#A0A0A0] font-mono text-[10px]">{fail.location}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right Side - Metadata & Actions */}
+        <div className="lg:col-span-4 space-y-6">
+          {/* Task Info */}
+          <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl p-6 space-y-6">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono text-[#5A5A5A]">{task.id}</span>
+              <span className="text-[10px] text-[#5A5A5A]">{task.createdAt}</span>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-[#A0A0A0]">Priority</span>
+                <span className="text-xs font-medium text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded">High</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-[#A0A0A0]">Repository</span>
+                <div className="flex items-center gap-1.5 text-xs text-[#F5F5F5]">
+                  <Github className="w-3.5 h-3.5" />
+                  {task.repo}
+                </div>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-[#A0A0A0]">Branch</span>
+                <div className="flex items-center gap-1.5 text-xs text-[#F5F5F5]">
+                  <GitBranch className="w-3.5 h-3.5" />
+                  {task.branch}
+                </div>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-[#A0A0A0]">PR</span>
+                <a href="#" className="flex items-center gap-1.5 text-xs text-blue-400 hover:underline">
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  #{task.prNumber}
+                </a>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-[#A0A0A0]">Commit</span>
+                <div className="flex items-center gap-1.5 text-xs text-[#5A5A5A] font-mono">
+                  <GitCommit className="w-3.5 h-3.5" />
+                  {task.commitHash}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl p-6 space-y-6">
+            <div className="space-y-3">
+              <label className="text-[10px] text-[#5A5A5A] uppercase tracking-wider font-medium">Human Override</label>
+              <textarea 
+                placeholder="Type an instruction to inject..."
+                className="w-full bg-[#0F0F0F] border border-[#2A2A2A] rounded-lg p-3 text-xs text-[#F5F5F5] focus:border-indigo-500 outline-none min-h-[80px] resize-none"
+              />
+              <button className="w-full bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg py-2.5 text-xs font-medium transition-all flex items-center justify-center gap-2">
+                <Play className="w-3.5 h-3.5" />
+                Resume with instruction
+              </button>
+            </div>
+
+            <div className="pt-6 border-t border-[#2A2A2A] space-y-3">
+              <button className="w-full bg-transparent border border-[#2A2A2A] hover:border-red-500/50 hover:text-red-400 text-[#A0A0A0] rounded-lg py-2.5 text-xs font-medium transition-all">
+                Abort task
+              </button>
+              <button 
+                disabled={!canDeploy}
+                className={cn(
+                  "w-full rounded-lg py-2.5 text-xs font-medium transition-all",
+                  canDeploy 
+                    ? "bg-indigo-600 hover:bg-indigo-500 text-white" 
+                    : "bg-transparent border border-[#2A2A2A] text-[#5A5A5A] cursor-not-allowed opacity-40"
+                )}
+              >
+                Approve deploy
+              </button>
+            </div>
+          </div>
+
+          {/* Memory Hits */}
+          <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl overflow-hidden">
+            <div className="p-4 border-b border-[#2A2A2A] flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Brain className="w-4 h-4 text-purple-400" />
+                <span className="text-sm font-semibold">Memory Hits</span>
+              </div>
+              <span className="text-[10px] font-mono text-[#5A5A5A]">2 found</span>
+            </div>
+            <div className="p-4 space-y-4">
+              {MOCK_MEMORIES.slice(0, 2).map((memory) => (
+                <div key={memory.id} className="space-y-2">
+                  <div className="flex justify-between items-start">
+                    <p className="text-xs text-[#A0A0A0] leading-relaxed">{memory.content}</p>
+                    <span className="text-[10px] font-mono text-indigo-400">
+                      {memory.score ? `${(memory.score * 100).toFixed(0)}%` : ''}
+                    </span>
+                  </div>
+                  <div className="flex gap-1.5">
+                    {memory.tags.map(tag => (
+                      <span key={tag} className="text-[9px] bg-[#242424] text-[#5A5A5A] px-1.5 py-0.5 rounded">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+</file>
+
+<file path="frontend/src/router.tsx">
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { AppShell } from './components/layout/AppShell';
+import { ProtectedRoute } from './components/auth/ProtectedRoute';
+import { Login } from './pages/Login';
+import { Auth } from './pages/Auth';
+import { Dashboard } from './pages/Dashboard';
+import { TaskDetail } from './pages/TaskDetail';
+import { AgentLog } from './pages/AgentLog';
+import { Inbox } from './pages/Inbox';
+import { MemoryExplorer } from './pages/MemoryExplorer';
+import { Activity } from './pages/Activity';
+import { ErrorPage } from './pages/ErrorPage';
+
+export const router = createBrowserRouter([
+  {
+    path: '/login',
+    element: <Login />,
+  },
+  {
+    path: '/auth/callback',
+    element: <Auth />,
+  },
+  {
+    path: '/',
+    element: (
+      <ProtectedRoute>
+        <AppShell />
+      </ProtectedRoute>
+    ),
+    errorElement: <ErrorPage />,
+    children: [
+      {
+        index: true,
+        element: <Navigate to="/dashboard" replace />,
+      },
+      {
+        path: 'dashboard',
+        element: <Dashboard />,
+      },
+      {
+        path: 'tasks',
+        element: <Navigate to="/dashboard" replace />,
+      },
+      {
+        path: 'tasks/:id',
+        element: <TaskDetail />,
+      },
+      {
+        path: 'tasks/:id/log',
+        element: <AgentLog />,
+      },
+      {
+        path: 'inbox',
+        element: <Inbox />,
+      },
+      {
+        path: 'memory',
+        element: <MemoryExplorer />,
+      },
+      {
+        path: 'activity',
+        element: <Activity />,
+      },
+      {
+        path: '*',
+        element: <Navigate to="/dashboard" replace />,
+      },
+    ],
+  },
+]);
+</file>
+
+<file path="frontend/src/store/authStore.ts">
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+
+const GITHUB_CLIENT_ID = import.meta.env.VITE_GITHUB_CLIENT_ID;
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
+const REDIRECT_URI = `${window.location.origin}/auth/callback`;
+
+export interface GitHubUser {
+  login: string;
+  name: string;
+  avatar_url: string;
+  email: string;
+}
+
+interface AuthState {
+  hasHydrated: boolean;
+  isAuthenticated: boolean;
+  accessToken: string | null;
+  user: GitHubUser | null;
+  error: string | null;
+  isLoading: boolean;
+  initiateGitHubLogin: () => void;
+  exchangeCode: (code: string) => Promise<void>;
+  logout: () => void;
+  checkAuth: () => Promise<void>;
+  markHydrated: () => void;
+}
+
+const getErrorMessage = (error: unknown, fallback: string) =>
+  error instanceof Error ? error.message : fallback;
+
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set, get) => ({
+      hasHydrated: false,
+      isAuthenticated: false,
+      accessToken: null,
+      user: null,
+      error: null,
+      isLoading: false,
+
+      markHydrated: () => set({ hasHydrated: true }),
+
+      initiateGitHubLogin: () => {
+        if (!GITHUB_CLIENT_ID) {
+          set({
+            error: 'Missing VITE_GITHUB_CLIENT_ID. Add it to your environment before signing in.',
+          });
+          return;
+        }
+
+        const githubAuthUrl = new URL('https://github.com/login/oauth/authorize');
+        githubAuthUrl.searchParams.set('client_id', GITHUB_CLIENT_ID);
+        githubAuthUrl.searchParams.set('redirect_uri', REDIRECT_URI);
+        githubAuthUrl.searchParams.set('scope', 'repo user:email');
+
+        window.location.assign(githubAuthUrl.toString());
+      },
+
+      exchangeCode: async (code: string) => {
+        set({ isLoading: true, error: null });
+
+        try {
+          const response = await fetch(`${BACKEND_URL}/auth/github/callback`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(
+              errorData.detail || errorData.message || 'Failed to authenticate with GitHub',
+            );
+          }
+
+          const data = await response.json();
+
+          set({
+            isAuthenticated: true,
+            accessToken: data.access_token,
+            user: data.user,
+            isLoading: false,
+            error: null,
+          });
+        } catch (error) {
+          const message = getErrorMessage(error, 'Failed to authenticate with GitHub');
+
+          set({
+            isAuthenticated: false,
+            accessToken: null,
+            user: null,
+            isLoading: false,
+            error: message,
+          });
+
+          throw error instanceof Error ? error : new Error(message);
+        }
+      },
+
+      logout: () => {
+        set({
+          isAuthenticated: false,
+          accessToken: null,
+          user: null,
+          error: null,
+          isLoading: false,
+        });
+
+        window.localStorage.removeItem('conductor-auth');
+        window.location.assign('/login');
+      },
+
+      checkAuth: async () => {
+        const { accessToken, user } = get();
+
+        if (!accessToken) {
+          set({ isAuthenticated: false, isLoading: false, error: null });
+          return;
+        }
+
+        set({ isLoading: true, error: null });
+
+        try {
+          const response = await fetch(`${BACKEND_URL}/auth/verify`, {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
+          });
+
+          if (!response.ok) {
+            throw new Error('Your GitHub session has expired. Please sign in again.');
+          }
+
+          const contentType = response.headers.get('content-type') || '';
+          const data = contentType.includes('application/json')
+            ? await response.json().catch(() => null)
+            : null;
+
+          set({
+            isAuthenticated: true,
+            user: data?.user ?? user,
+            isLoading: false,
+            error: null,
+          });
+        } catch (error) {
+          set({
+            isAuthenticated: false,
+            accessToken: null,
+            user: null,
+            isLoading: false,
+            error: getErrorMessage(error, 'Authentication check failed'),
+          });
+
+          window.localStorage.removeItem('conductor-auth');
+        }
+      },
+    }),
+    {
+      name: 'conductor-auth',
+      partialize: (state) => ({
+        isAuthenticated: state.isAuthenticated,
+        accessToken: state.accessToken,
+        user: state.user,
+      }),
+      onRehydrateStorage: () => (state) => {
+        state?.markHydrated();
+      },
+    },
+  ),
+);
+</file>
+
+<file path="frontend/src/store/githubStore.ts">
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+import { create } from 'zustand';
+import { useAuthStore } from './authStore';
+
+export interface GitHubRepository {
+  id: number;
+  name: string;
+  full_name: string;
+  private: boolean;
+  default_branch: string;
+  html_url: string;
+}
+
+export interface GitHubBranch {
+  name: string;
+  protected: boolean;
+}
+
+interface GitHubState {
+  repositories: GitHubRepository[];
+  branches: Record<string, GitHubBranch[]>;
+  isLoadingRepos: boolean;
+  isLoadingBranches: Record<string, boolean>;
+  error: string | null;
+  fetchRepositories: () => Promise<GitHubRepository[]>;
+  fetchBranches: (repoFullName: string) => Promise<GitHubBranch[]>;
+}
+
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
+
+const getErrorMessage = (error: unknown, fallback: string) =>
+  error instanceof Error ? error.message : fallback;
+
+export const useGitHubStore = create<GitHubState>((set, get) => ({
+  repositories: [],
+  branches: {},
+  isLoadingRepos: false,
+  isLoadingBranches: {},
+  error: null,
+
+  fetchRepositories: async () => {
+    const token = useAuthStore.getState().accessToken;
+
+    if (!token) {
+      const message = 'Not authenticated';
+      set({ error: message, repositories: [], isLoadingRepos: false });
+      throw new Error(message);
+    }
+
+    set({ isLoadingRepos: true, error: null });
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/github/repositories`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || errorData.message || 'Failed to fetch repositories');
+      }
+
+      const repositories = (await response.json()) as GitHubRepository[];
+      set({ repositories, isLoadingRepos: false, error: null });
+      return repositories;
+    } catch (error) {
+      const message = getErrorMessage(error, 'Failed to fetch repositories');
+
+      set({
+        error: message,
+        isLoadingRepos: false,
+        repositories: [],
+      });
+
+      throw error instanceof Error ? error : new Error(message);
+    }
+  },
+
+  fetchBranches: async (repoFullName: string) => {
+    const token = useAuthStore.getState().accessToken;
+
+    if (!token) {
+      const message = 'Not authenticated';
+      set({ error: message });
+      throw new Error(message);
+    }
+
+    if (get().branches[repoFullName]) {
+      return get().branches[repoFullName];
+    }
+
+    set({
+      isLoadingBranches: { ...get().isLoadingBranches, [repoFullName]: true },
+      error: null,
+    });
+
+    try {
+      const response = await fetch(
+        `${BACKEND_URL}/github/repositories/${encodeURIComponent(repoFullName)}/branches`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || errorData.message || 'Failed to fetch branches');
+      }
+
+      const branches = (await response.json()) as GitHubBranch[];
+
+      set({
+        branches: { ...get().branches, [repoFullName]: branches },
+        isLoadingBranches: { ...get().isLoadingBranches, [repoFullName]: false },
+        error: null,
+      });
+
+      return branches;
+    } catch (error) {
+      const message = getErrorMessage(error, 'Failed to fetch branches');
+
+      set({
+        error: message,
+        isLoadingBranches: { ...get().isLoadingBranches, [repoFullName]: false },
+      });
+
+      throw error instanceof Error ? error : new Error(message);
+    }
+  },
+}));
+</file>
+
+<file path="frontend/src/types/agent.ts">
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+export type AgentRole = 'Developer' | 'QA' | 'CISO' | 'Critic' | 'DevOps' | 'CEO/Manager' | 'Orchestrator';
+
+export interface Agent {
+  id: string;
+  role: AgentRole;
+  status: 'ready' | 'busy' | 'error';
+  color: string;
+}
+</file>
+
+<file path="frontend/src/types/task.ts">
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import { AgentRole } from './agent';
+
+export type TaskStatus = 'running' | 'retrying' | 'blocked' | 'escalated' | 'deployed' | 'failed';
+export type Priority = 'Low' | 'Medium' | 'High' | 'Critical';
+
+export interface Task {
+  id: string;
+  title: string;
+  status: TaskStatus;
+  currentAgent: AgentRole;
+  retryCount?: number;
+  maxRetries?: number;
+  timeElapsed: string;
+  prNumber?: number;
+  progress: number;
+  createdAt: string;
+  priority: Priority;
+  repo: string;
+  branch: string;
+  commitHash: string;
+}
+
+export interface TaskEvent {
+  id: string;
+  agent: AgentRole;
+  description: string;
+  timestamp: string;
+  payload?: any;
+  type?: 'info' | 'error' | 'success' | 'warning';
+}
+
+export interface QAResult {
+  attempt: number;
+  status: 'pass' | 'fail';
+  unitTests: { pass: number; fail: number };
+  integrationTests: { pass: number; fail: number };
+  coverage: number;
+  latency: string;
+  failures: Array<{
+    name: string;
+    error: string;
+    severity: 'high' | 'medium' | 'low';
+    location: string;
+  }>;
+}
+
+export interface MemoryEntry {
+  id: string;
+  content: string;
+  tags: string[];
+  sourceTaskId: string;
+  date: string;
+  score?: number;
+}
+
+export interface Escalation {
+  id: string;
+  taskId: string;
+  reason: string;
+  recommendation?: string;
+  type: 'max_retries' | 'security_block';
+  findings?: string;
+}
+</file>
+
+<file path="frontend/src/vite-env.d.ts">
+/// <reference types="vite/client" />
+</file>
+
+<file path="frontend/tsconfig.json">
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "experimentalDecorators": true,
+    "useDefineForClassFields": false,
+    "module": "ESNext",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "allowJs": true,
+    "jsx": "react-jsx",
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    },
+    "allowImportingTsExtensions": true,
+    "noEmit": true
+  }
+}
+</file>
+
+<file path="frontend/vite.config.ts">
+import tailwindcss from '@tailwindcss/vite';
+import react from '@vitejs/plugin-react';
+import path from 'path';
+import {defineConfig, loadEnv} from 'vite';
+
+export default defineConfig(({mode}) => {
+  const env = loadEnv(mode, '.', '');
+  return {
+    plugins: [react(), tailwindcss()],
+    define: {
+      'process.env': env,
+    },
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, '.'),
+      },
+    },
+    server: {
+      // HMR is disabled in AI Studio via DISABLE_HMR env var.
+      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
+      hmr: process.env.DISABLE_HMR !== 'true',
+    },
+  };
+});
+</file>
+
+</files>

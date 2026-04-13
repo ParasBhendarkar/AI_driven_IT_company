@@ -1,0 +1,133 @@
+services:
+  #
+  # Infrastructure Services
+  #
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: conductor-postgres
+    environment:
+      POSTGRES_USER: conductor
+      POSTGRES_PASSWORD: conductor_dev
+      POSTGRES_DB: conductor
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U conductor"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - conductor-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: conductor-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - conductor-network
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: conductor-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - conductor-network
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: conductor-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    # Pull models after container starts:
+    # docker exec -it conductor-ollama ollama pull deepseek-coder-v2-lite
+    # docker exec -it conductor-ollama ollama pull qwen2.5:32b
+    # docker exec -it conductor-ollama ollama pull mistral-nemo:12b
+    networks:
+      - conductor-network
+
+  # ===========================================
+  # Application Services (commented out for Module 1A)
+  # Uncomment in Module 1D after workers are ready
+  # ===========================================
+
+  # api:
+  #   build:
+  #     context: ./backend
+  #     dockerfile: Dockerfile
+  #   container_name: conductor-api
+  #   ports:
+  #     - "8000:8000"
+  #   env_file:
+  #     - ./backend/.env
+  #   environment:
+  #     - POSTGRES_HOST=postgres
+  #     - REDIS_HOST=redis
+  #     - QDRANT_HOST=qdrant
+  #     - OLLAMA_HOST=ollama
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #     qdrant:
+  #       condition: service_healthy
+  #   volumes:
+  #     - ./backend:/app
+  #   command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+  #   networks:
+  #     - conductor-network
+
+  # worker:
+  #   build:
+  #     context: ./backend
+  #     dockerfile: Dockerfile
+  #   container_name: conductor-worker
+  #   env_file:
+  #     - ./backend/.env
+  #   environment:
+  #     - POSTGRES_HOST=postgres
+  #     - REDIS_HOST=redis
+  #     - QDRANT_HOST=qdrant
+  #     - OLLAMA_HOST=ollama
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   volumes:
+  #     - ./backend:/app
+  #   command: celery -A workers.celery_app worker --loglevel=info
+  #   networks:
+  #     - conductor-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  qdrant_data:
+  ollama_data:
+
+networks:
+  conductor-network:
+    driver: bridge
