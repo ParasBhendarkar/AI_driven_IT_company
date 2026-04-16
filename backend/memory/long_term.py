@@ -100,12 +100,7 @@ async def retrieve_memory(query: str, limit: int = 5, top_k: int | None = None) 
 
     results = await loop.run_in_executor(
         _executor,
-        lambda: client.search(
-            collection_name=settings.QDRANT_COLLECTION,
-            query_vector=vector,
-            limit=result_limit,
-            with_payload=True,
-        ),
+        lambda: _search_points(client, vector, result_limit),
     )
 
     memories: list[MemoryEntry] = []
@@ -115,6 +110,24 @@ async def retrieve_memory(query: str, limit: int = 5, top_k: int | None = None) 
         memories.append(MemoryEntry.model_validate(payload))
 
     return memories
+
+
+def _search_points(client: QdrantClient, vector: list[float], limit: int):
+    if hasattr(client, "search"):
+        return client.search(
+            collection_name=settings.QDRANT_COLLECTION,
+            query_vector=vector,
+            limit=limit,
+            with_payload=True,
+        )
+
+    response = client.query_points(
+        collection_name=settings.QDRANT_COLLECTION,
+        query=vector,
+        limit=limit,
+        with_payload=True,
+    )
+    return response.points
 
 
 async def delete_memory(memory_id: str) -> None:

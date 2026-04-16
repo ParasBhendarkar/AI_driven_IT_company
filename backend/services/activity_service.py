@@ -79,11 +79,19 @@ async def get_stats() -> dict:
                 .where(TaskRow.status == "escalated")
             ) or 0
 
+            failed = await session.scalar(
+                select(func.count(TaskRow.id))
+                .where(TaskRow.created_at >= day_start)
+                .where(TaskRow.created_at < day_end)
+                .where(TaskRow.status == "failed")
+            ) or 0
+
             chart_data.append(
                 {
                     "day": day_start.strftime("%a"),
                     "completed": completed,
                     "escalated": escalated,
+                    "failed": failed,
                 }
             )
 

@@ -20,6 +20,8 @@ export const agentColors: Record<AgentRole, string> = {
   DevOps: '#22C55E',
   'CEO/Manager': '#EC4899',
   Orchestrator: '#64748B',
+  'QA Planner': '#10B981',
+  'QA Runner': '#06B6D4',
 };
 
 export const AgentChip: React.FC<AgentChipProps> = ({ role, className }) => {

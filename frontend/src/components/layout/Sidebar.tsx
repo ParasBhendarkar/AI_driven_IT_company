@@ -17,17 +17,40 @@ import {
 import { cn } from '../../lib/utils';
 import { useAuthStore } from '../../store/authStore';
 
-const navItems = [
+const navItemsConfig = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
-  { icon: CheckSquare, label: 'Tasks', path: '/tasks', count: 3 },
-  { icon: AlertCircle, label: 'Inbox', path: '/inbox', badge: 2 },
+  { icon: CheckSquare, label: 'Tasks', path: '/tasks', hasCount: true },
+  { icon: AlertCircle, label: 'Inbox', path: '/inbox', hasBadge: true },
   { icon: Brain, label: 'Memory', path: '/memory' },
   { icon: Activity, label: 'Activity', path: '/activity' },
 ];
 
+import { fetchJson } from '../../lib/backend';
+
 export const Sidebar: React.FC = () => {
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
+  const [taskCount, setTaskCount] = React.useState(0);
+  const [inboxCount, setInboxCount] = React.useState(0);
+
+  React.useEffect(() => {
+    const loadCounts = async () => {
+      try {
+        const tasks = await fetchJson<any[]>('/tasks');
+        const activeTasks = tasks.filter(t => t.status !== 'deployed' && t.status !== 'failed');
+        setTaskCount(activeTasks.length);
+        
+        const inbox = await fetchJson<any[]>('/inbox');
+        setInboxCount(inbox.length);
+      } catch (err) {
+        console.error('Failed to load counts for sidebar', err);
+      }
+    };
+    
+    loadCounts();
+    const interval = setInterval(loadCounts, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <aside className="w-[220px] fixed left-0 top-0 h-screen bg-[#0F0F0F] border-r border-[#2A2A2A] flex flex-col z-50">
@@ -39,7 +62,7 @@ export const Sidebar: React.FC = () => {
       </div>
 
       <nav className="flex-1 px-3 space-y-1">
-        {navItems.map((item) => (
+        {navItemsConfig.map((item) => (
           <NavLink
             key={item.path}
             to={item.path}
@@ -54,14 +77,14 @@ export const Sidebar: React.FC = () => {
               <item.icon className="w-4 h-4" />
               {item.label}
             </div>
-            {item.badge && (
+            {item.hasBadge && inboxCount > 0 && (
               <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">
-                {item.badge}
+                {inboxCount}
               </span>
             )}
-            {item.count && (
+            {item.hasCount && taskCount > 0 && (
               <span className="text-[#5A5A5A] text-[10px] font-mono">
-                {item.count}
+                {taskCount}
               </span>
             )}
           </NavLink>

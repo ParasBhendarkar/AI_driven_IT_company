@@ -31,8 +31,12 @@ async def _run_task_async(task_id: str) -> dict:
 
     state = await get_state(task_id)
     if state is None:
-        logger.error("Task %s not found in Redis", task_id)
-        return {"status": "error", "task_id": task_id, "error": "State not found"}
+        logger.warning("Task %s not found in Redis, rebuilding from Postgres", task_id)
+        state = await _rebuild_state_from_postgres(task_id)
+        if state is None:
+            logger.error("Task %s not found in Redis or Postgres", task_id)
+            return {"status": "error", "task_id": task_id, "error": "State not found"}
+        await save_state(state)
 
     try:
         from datetime import datetime
@@ -85,17 +89,74 @@ async def _run_task_async(task_id: str) -> dict:
     except Exception as exc:
         logger.exception("Task %s failed with unhandled exception", task_id)
 
+        err = str(exc) or repr(exc)
+
         state.status = TaskStatus.FAILED
-        state.last_error = str(exc)
+        state.progress = 0
+        state.last_error = err
         await save_state(state)
+
+        # Persist failure to Postgres so Dashboard (DB-backed) matches TaskDetail (Redis-backed)
+        try:
+            from datetime import datetime
+            from database import async_session_maker
+            from sqlalchemy import update
+            from models.db import Task as TaskRow
+
+            async with async_session_maker() as session:
+                await session.execute(
+                    update(TaskRow)
+                    .where(TaskRow.id == task_id)
+                    .values(
+                        status=TaskStatus.FAILED.value,
+                        progress=0,
+                        current_agent=str(getattr(state.current_agent, "value", state.current_agent)),
+                        completed_at=datetime.utcnow(),
+                        updated_at=datetime.utcnow(),
+                    )
+                )
+                await session.commit()
+        except Exception as db_exc:
+            logger.warning("Could not persist failure to Postgres for task %s: %s", task_id, db_exc)
 
         await publish_event(
             task_id,
             AgentEvent(
                 task_id=task_id,
                 agent="Orchestrator",
-                description=f"Task failed: {exc}",
+                description=f"Task failed: {err}",
                 type="error",
             ),
         )
-        return {"status": "failed", "task_id": task_id, "error": str(exc)}
+        return {"status": "failed", "task_id": task_id, "error": err}
+
+
+async def _rebuild_state_from_postgres(task_id: str):
+    from database import async_session_maker
+    from models.db import Task as TaskRow
+    from models.schemas import Priority, TaskState
+    from sqlalchemy import select
+
+    async with async_session_maker() as session:
+        result = await session.execute(select(TaskRow).where(TaskRow.id == task_id))
+        row = result.scalar_one_or_none()
+
+    if row is None:
+        return None
+
+    return TaskState(
+        task_id=row.id,
+        title=row.title,
+        description=row.description,
+        repo=row.repo,
+        branch=row.branch,
+        priority=Priority(row.priority),
+        acceptance_criteria=row.acceptance_criteria or [],
+        context_refs=row.context_refs or [],
+        status=TaskStatus(row.status),
+        current_agent=row.current_agent or "Orchestrator",
+        retry_count=row.retry_count or 0,
+        progress=row.progress or 5,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )

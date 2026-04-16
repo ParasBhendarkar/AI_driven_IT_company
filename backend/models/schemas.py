@@ -41,6 +41,8 @@ class AgentRole(str, Enum):
     DEVOPS = "DevOps"
     CEO_MANAGER = "CEO/Manager"
     ORCHESTRATOR = "Orchestrator"
+    QA_PLANNER = "QA Planner"
+    QA_RUNNER = "QA Runner"
 
 
 class OAuthCodeRequest(BaseModel):
@@ -123,6 +125,9 @@ class DevOutput(BaseModel):
     branch: str | None = None
     commit_hash: str | None = None
     pr_number: int | None = None
+    commit_message: str | None = None
+    pr_title: str | None = None
+    pr_body: str | None = None
     files_changed: list[FileChange] = Field(default_factory=list)
 
 
@@ -187,6 +192,54 @@ class CriticOutput(BaseModel):
     approved: bool = False
 
 
+class CEOOutput(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    goals: list[str] = Field(default_factory=list)
+    kpis: dict[str, str] = Field(default_factory=dict)
+    constraints: dict[str, str] = Field(default_factory=dict)
+    priority: Priority = Priority.MEDIUM
+    approved: bool = True
+    delegation_notes: str = ""
+
+
+class CTOOutput(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    architecture: str = ""
+    stack: list[str] = Field(default_factory=list)
+    components: list[str] = Field(default_factory=list)
+    risks: list[str] = Field(default_factory=list)
+    technical_notes: str = ""
+    repo_structure: list[str] = Field(default_factory=list)
+
+
+class ManagerOutput(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    work_packages: list[str] = Field(default_factory=list)
+    execution_order: list[str] = Field(default_factory=list)
+    file_assignments: list[str] = Field(default_factory=list)
+    acceptance_criteria: list[str] = Field(default_factory=list)
+    risks: str = ""
+    coordination_notes: str = ""
+
+
+class TeamLeaderOutput(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    tickets: list[str] = Field(default_factory=list)
+    enriched_description: str = ""
+    enriched_acceptance_criteria: list[str] = Field(default_factory=list)
+    file_targets: list[str] = Field(default_factory=list)
+    implementation_notes: str = ""
+    unblocking_notes: str = ""
+    review_approved: bool = True
+    review_feedback: str = ""
+    final_approved: bool = True
+    final_feedback: str = ""
+
+
 class TaskState(BaseModel):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
@@ -218,6 +271,16 @@ class TaskState(BaseModel):
     qa_result: QAResult | None = Field(default=None, alias="qaResult")
     ciso_gate: CISOGate | None = Field(default=None, alias="cisoGate")
     critic_output: CriticOutput | None = Field(default=None, alias="criticOutput")
+    ceo_output: CEOOutput | None = None
+    cto_output: CTOOutput | None = None
+    manager_output: ManagerOutput | None = None
+    team_leader_output: TeamLeaderOutput | None = None
+    tl_review_count: int = 0
+    tl_review_feedback: str = ""
+    reviewed_file_contents: dict[str, str] = Field(default_factory=dict)
+    tl_final_count: int = 0
+    tl_final_feedback: str = ""
+    ceo_approved: bool = True
 
 
 class TaskResponse(BaseModel):

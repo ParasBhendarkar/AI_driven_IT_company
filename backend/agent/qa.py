@@ -20,10 +20,20 @@ logger = logging.getLogger(__name__)
 COVERAGE_THRESHOLD = 80.0
 LATENCY_THRESHOLD_MS = 200.0
 
+QA_RUNNER_SYSTEM_PROMPT = """
+You are the QA Execution Engine. 
+The QA Planner has already written the test suite, and the Developer has written the application code.
+
+YOUR TASK:
+1. Use your `run_tests` tool (or terminal execution tool) to execute `pytest` on the repository.
+2. Analyze the test output.
+3. If all tests pass, mark your status as SUCCESS to allow deployment.
+4. If tests fail, explicitly list the exact `AssertionError` or traceback in your output so the Developer knows what to fix in the next retry loop. Do NOT rewrite the tests; just report the failures.
+"""
 
 class QAAgent(BaseAgent):
-    role = "QA"
-    model = "claude-sonnet-4-5"
+    role = "QA Runner"
+    model = "ollama/qwen2.5-coder:3b"
 
     async def run(self, state: TaskState) -> TaskState:
         start = time.time()
@@ -66,9 +76,25 @@ class QAAgent(BaseAgent):
             )
         else:
             failure_summary = "; ".join(f.error for f in (qa.failures or [])[:2])
+            
+            # Pass to LLM for detailed analysis using the new system prompt
+            await self._publish(state.task_id, "Analyzing test failures with QA Runner LLM...")
+            messages = [
+                {"role": "user", "content": f"The tests failed. Here is the output overview:\n\n{failure_summary}\n\nPlease analyze this and provide the explicitly listed AssertionErrors."}
+            ]
+            response = await self._call_llm(
+                messages=messages,
+                system=QA_RUNNER_SYSTEM_PROMPT,
+                temperature=0.1,
+                max_tokens=1000,
+            )
+            
+            if response and response.choices and response.choices[0].message.content:
+                failure_summary = response.choices[0].message.content.strip()
+
             await self._publish(
                 state.task_id,
-                f"Tests failed (attempt {attempt}) — {failure_summary}",
+                f"Tests failed (attempt {attempt}) — {failure_summary[:200]}...",
                 event_type="error",
                 payload=qa.model_dump(),
             )

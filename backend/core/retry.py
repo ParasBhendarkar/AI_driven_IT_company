@@ -55,3 +55,17 @@ def build_retry_context(qa: QAResult, memory_hits: list[dict]) -> str:
             parts.append(f"[{score:.0%}] {content}")
 
     return "\n".join(parts)
+
+
+MAX_TL_REVIEW_ATTEMPTS = 3
+MAX_TL_FINAL_ATTEMPTS = 2
+
+
+def should_escalate_tl_review(tl_review_count: int) -> bool:
+    """True when Team Leader has rejected Developer too many times."""
+    return tl_review_count >= MAX_TL_REVIEW_ATTEMPTS
+
+
+def should_escalate_tl_final(tl_final_count: int) -> bool:
+    """True when Team Leader Final has rejected too many times."""
+    return tl_final_count >= MAX_TL_FINAL_ATTEMPTS

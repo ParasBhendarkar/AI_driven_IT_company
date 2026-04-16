@@ -24,7 +24,7 @@ interface ActivityStats {
   avgRetries: number;
   cisoBlocks: number;
   memoryWrites: number;
-  chartData: Array<{ day: string; completed: number; escalated: number }>;
+  chartData: Array<{ day: string; completed: number; escalated: number; failed: number }>;
 }
 
 export const Activity: React.FC = () => {
@@ -87,7 +87,8 @@ export const Activity: React.FC = () => {
               <YAxis axisLine={false} tickLine={false} tick={{ fill: '#5A5A5A', fontSize: 12 }} />
               <Tooltip cursor={{ fill: '#242424' }} contentStyle={{ backgroundColor: '#1A1A1A', border: '1px solid #2A2A2A', borderRadius: '8px' }} itemStyle={{ fontSize: '12px' }} />
               <Bar dataKey="completed" stackId="a" fill="#6366F1" radius={[0, 0, 0, 0]} />
-              <Bar dataKey="escalated" stackId="a" fill="#EF4444" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="escalated" stackId="a" fill="#EF4444" radius={[0, 0, 0, 0]} />
+              <Bar dataKey="failed" stackId="a" fill="#F59E0B" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

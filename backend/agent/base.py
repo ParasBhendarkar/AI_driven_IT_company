@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 import logging
-import os
 import time
 from abc import ABC, abstractmethod
 from datetime import datetime
 
 import litellm
 
+from config import settings
 from database import async_session_maker
 from memory.short_term import save_state, publish_event
 from models.db import AgentCall
@@ -15,14 +16,12 @@ from models.events import AgentEvent, TaskStatusEvent
 from models.schemas import TaskState, TaskStatus
 from core.graph import _compute_progress
 
-litellm.api_key = os.getenv("ANTHROPIC_API_KEY", "")
-
 logger = logging.getLogger(__name__)
 
 
 class BaseAgent(ABC):
     role: str = "BaseAgent"
-    model: str = "claude-sonnet-4-5"
+    model: str = "ollama/phi3.5"
 
     @abstractmethod
     async def run(self, state: TaskState) -> TaskState:
@@ -36,27 +35,59 @@ class BaseAgent(ABC):
         system: str | None = None,
         temperature: float = 0.2,
         max_tokens: int = 4096,
-    ) -> litellm.ModelResponse:
+        timeout_seconds: int = 180,
+        json_mode: bool = False,
+    ) -> litellm.ModelResponse | None:
         """
         Async LLM call via LiteLLM.
         Prepends system message if provided.
         Passes tools if model supports tool_use.
+        Returns None (never raises) so graph nodes can detect failure and continue.
         """
-        if system:
-            messages = [{"role": "system", "content": system}] + messages
+        logger.info(f"LLM call starting — role={self.role}, model={self.model}")
 
-        kwargs: dict = {
-            "model": self.model,
-            "messages": messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-        }
+        try:
+            if system:
+                messages = [{"role": "system", "content": system}] + messages
 
-        if tools:
-            kwargs["tools"] = tools
-            kwargs["tool_choice"] = "auto"
+            kwargs: dict = {
+                "model": self.model,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "timeout": timeout_seconds,
+            }
+            if self.model.startswith("ollama/"):
+                kwargs["api_base"] = settings.OLLAMA_BASE_URL
 
-        return await litellm.acompletion(**kwargs)
+            if tools:
+                kwargs["tools"] = tools
+                kwargs["tool_choice"] = "auto"
+
+            if json_mode:
+                kwargs["format"] = "json"
+
+            response = await asyncio.wait_for(
+                litellm.acompletion(**kwargs),
+                timeout=timeout_seconds,
+            )
+
+            tokens_used = response.usage.total_tokens if response and response.usage else 0
+            logger.info(f"LLM call finished — role={self.role}, tokens={tokens_used}")
+            return response
+
+        except asyncio.TimeoutError:
+            logger.error(
+                f"LLM call timed out — role={self.role}, model={self.model}, "
+                f"timeout={timeout_seconds}s"
+            )
+            return None
+        except Exception as exc:
+            logger.error(
+                f"LLM call failed — role={self.role}, model={self.model}, "
+                f"error_type={type(exc).__name__}, error={exc}"
+            )
+            return None
 
     async def _publish(
         self,

@@ -46,10 +46,7 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      disable: true
     networks:
       - conductor-network
 
@@ -72,55 +69,59 @@ services:
   # Uncomment in Module 1D after workers are ready
   # ===========================================
 
-  # api:
-  #   build:
-  #     context: ./backend
-  #     dockerfile: Dockerfile
-  #   container_name: conductor-api
-  #   ports:
-  #     - "8000:8000"
-  #   env_file:
-  #     - ./backend/.env
-  #   environment:
-  #     - POSTGRES_HOST=postgres
-  #     - REDIS_HOST=redis
-  #     - QDRANT_HOST=qdrant
-  #     - OLLAMA_HOST=ollama
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
-  #     qdrant:
-  #       condition: service_healthy
-  #   volumes:
-  #     - ./backend:/app
-  #   command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-  #   networks:
-  #     - conductor-network
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: conductor-api
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      - POSTGRES_HOST=postgres
+      - REDIS_HOST=redis
+      - QDRANT_HOST=qdrant
+      - OLLAMA_HOST=ollama
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - PYTHONPATH=/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - conductor-network
 
-  # worker:
-  #   build:
-  #     context: ./backend
-  #     dockerfile: Dockerfile
-  #   container_name: conductor-worker
-  #   env_file:
-  #     - ./backend/.env
-  #   environment:
-  #     - POSTGRES_HOST=postgres
-  #     - REDIS_HOST=redis
-  #     - QDRANT_HOST=qdrant
-  #     - OLLAMA_HOST=ollama
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
-  #   volumes:
-  #     - ./backend:/app
-  #   command: celery -A workers.celery_app worker --loglevel=info
-  #   networks:
-  #     - conductor-network
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: conductor-worker
+    env_file:
+      - ./backend/.env
+    environment:
+      - POSTGRES_HOST=postgres
+      - REDIS_HOST=redis
+      - QDRANT_HOST=qdrant
+      - OLLAMA_HOST=ollama
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - PYTHONPATH=/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: celery -A workers.celery_app worker --loglevel=info --concurrency=1 --pool=solo --max-tasks-per-child=1
+    networks:
+      - conductor-network
 
 volumes:
   postgres_data:

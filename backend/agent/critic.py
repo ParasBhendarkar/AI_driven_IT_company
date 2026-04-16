@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 class CriticAgent(BaseAgent):
     role = "Critic"
-    model = "claude-sonnet-4-5"
+    model = "ollama/qwen2.5-coder:3b"
 
     SYSTEM_PROMPT = """
 You are an expert root-cause analyst for a software development system.
@@ -34,46 +34,74 @@ confidence is 0.0 to 1.0. Be honest — low confidence means more human review n
 """
 
     async def run(self, state: TaskState) -> TaskState:
+        logger.info("NODE ENTERED: critic")
         start = time.time()
-        await self._publish(
-            state.task_id,
-            f"Analysing failure pattern across {state.retry_count} attempts...",
-        )
 
-        prompt = self._build_prompt(state)
-        messages = [{"role": "user", "content": prompt}]
+        try:
+            await self._publish(
+                state.task_id,
+                f"Analysing failure pattern across {state.retry_count} attempts...",
+            )
 
-        response = await self._call_llm(
-            messages=messages,
-            system=self.SYSTEM_PROMPT,
-            temperature=0.1,
-            max_tokens=1024,
-        )
+            prompt = self._build_prompt(state)
+            messages = [{"role": "user", "content": prompt}]
 
-        tokens = response.usage.total_tokens if response.usage else 0
-        content = response.choices[0].message.content or "{}"
-        latency = time.time() - start
+            response = await self._call_llm(
+                messages=messages,
+                system=self.SYSTEM_PROMPT,
+                temperature=0.1,
+                max_tokens=1024,
+            )
 
-        critic_output = _parse_critic_response(content, state.task_id)
-        state.critic_output = critic_output
+            if response is None:
+                logger.warning("Critic _call_llm returned None, using fallback output")
+                state.critic_output = CriticOutput(
+                    score=3.0,
+                    summary="Critic LLM unavailable — review error history manually",
+                    root_cause="LLM call failed",
+                    fix="Retry or escalate to human review",
+                    confidence=0.0,
+                    approved=False,
+                )
+                return state
 
-        await self._publish(
-            state.task_id,
-            f"Root cause identified: {critic_output.root_cause or critic_output.summary}",
-            event_type="warning",
-            payload=critic_output.model_dump(),
-        )
+            tokens = response.usage.total_tokens if response.usage else 0
+            content = response.choices[0].message.content or "{}"
+            latency = time.time() - start
 
-        await self._log_call(
-            task_id=state.task_id,
-            action="critic_analysis",
-            input_payload={"attempt_count": state.retry_count},
-            output_payload=critic_output.model_dump(),
-            tokens_used=tokens,
-            latency_seconds=latency,
-        )
+            critic_output = _parse_critic_response(content, state.task_id)
+            state.critic_output = critic_output
 
-        return state
+            await self._publish(
+                state.task_id,
+                f"Root cause identified: {critic_output.root_cause or critic_output.summary}",
+                event_type="warning",
+                payload=critic_output.model_dump(),
+            )
+
+            await self._log_call(
+                task_id=state.task_id,
+                action="critic_analysis",
+                input_payload={"attempt_count": state.retry_count},
+                output_payload=critic_output.model_dump(),
+                tokens_used=tokens,
+                latency_seconds=latency,
+            )
+
+            return state
+
+        except Exception as exc:
+            logger.error(f"Critic run() crashed: {exc}")
+            if state.critic_output is None:
+                state.critic_output = CriticOutput(
+                    score=3.0,
+                    summary=f"Critic agent error: {str(exc)}",
+                    root_cause=None,
+                    fix=None,
+                    confidence=None,
+                    approved=False,
+                )
+            return state
 
     def _build_prompt(self, state: TaskState) -> str:
         lines = [

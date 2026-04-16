@@ -80,6 +80,11 @@ export const Dashboard: React.FC = () => {
     [tasks],
   );
 
+  const recentlyFinished = useMemo(
+    () => tasks.filter((task) => task.status === 'deployed' || task.status === 'failed').slice(0, 5),
+    [tasks],
+  );
+
   const completedToday = useMemo(
     () =>
       tasks.filter((task) => {
@@ -250,6 +255,45 @@ export const Dashboard: React.FC = () => {
                         style={{ width: `${task.progress}%` }}
                       />
                     </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="lg:col-span-2 space-y-4">
+          <h2 className="text-sm font-semibold text-[#F5F5F5] flex items-center gap-2">
+            Recently Finished
+            <span className="bg-[#242424] text-[#A0A0A0] text-[10px] px-1.5 py-0.5 rounded">
+              {recentlyFinished.length}
+            </span>
+          </h2>
+
+          {recentlyFinished.length === 0 ? (
+            <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl p-8 text-sm text-[#A0A0A0]">
+              No recently finished tasks.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 opacity-70">
+              {recentlyFinished.map((task) => (
+                <Link
+                  key={task.id}
+                  to={`/tasks/${task.id}`}
+                  className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl p-5 hover:border-[#383838] transition-all group"
+                >
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="space-y-1">
+                      <h3 className="text-sm font-medium text-[#F5F5F5] line-clamp-1 group-hover:text-indigo-400" title={task.title}>
+                        {task.title}
+                      </h3>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono text-[#5A5A5A]">{task.id}</span>
+                        <span className="text-[10px] text-[#5A5A5A]">•</span>
+                        <span className="text-[10px] text-[#5A5A5A] font-medium uppercase tracking-tighter">DONE</span>
+                      </div>
+                    </div>
+                    <StatusBadge status={task.status} />
                   </div>
                 </Link>
               ))}

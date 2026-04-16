@@ -1,15 +1,25 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from typing import TypedDict
 
 from langgraph.graph import StateGraph, END
 
+logger = logging.getLogger(__name__)
+
 from memory.short_term import save_state, publish_event
 from memory.long_term import retrieve_memory
 from models.schemas import TaskStatus, TaskState
 from models.events import AgentEvent, TaskStatusEvent
-from core.router import route_after_qa, route_after_ciso, route_after_critic
+from core.router import (
+    route_after_qa,
+    route_after_ciso,
+    route_after_critic,
+    route_after_ceo,
+    route_after_tl_review,
+    route_after_tl_final,
+)
 
 
 class GraphState(TypedDict):
@@ -71,6 +81,7 @@ async def _set_status(state: GraphState, status: TaskStatus, agent: str) -> None
 
 async def node_load_memory(state: GraphState) -> GraphState:
     """Retrieve semantic memory hits relevant to this task."""
+    logger.info("NODE ENTERED: load_memory")
     task = state["task"]
     await _set_status(state, TaskStatus.RUNNING, "Orchestrator")
     await _emit(state, "Loading memory context...")
@@ -85,7 +96,19 @@ async def node_load_memory(state: GraphState) -> GraphState:
     return state
 
 
+async def node_run_qa_planner(state: GraphState) -> GraphState:
+    logger.info("NODE ENTERED: qa_planner")
+    from agent.qa_planner import QAPlannerAgent
+
+    task = state["task"]
+    await _set_status(state, TaskStatus.RUNNING, "QA Planner")
+    updated_task = await QAPlannerAgent().run(task)
+    state["task"] = updated_task
+    return state
+
+
 async def node_run_developer(state: GraphState) -> GraphState:
+    logger.info("NODE ENTERED: developer")
     from agent.developer import DeveloperAgent
 
     task = state["task"]
@@ -96,6 +119,7 @@ async def node_run_developer(state: GraphState) -> GraphState:
 
 
 async def node_run_qa(state: GraphState) -> GraphState:
+    logger.info("NODE ENTERED: qa")
     from agent.qa import QAAgent
 
     task = state["task"]
@@ -106,6 +130,7 @@ async def node_run_qa(state: GraphState) -> GraphState:
 
 
 async def node_run_ciso(state: GraphState) -> GraphState:
+    logger.info("NODE ENTERED: ciso")
     from agent.ciso import CISOAgent
 
     task = state["task"]
@@ -116,6 +141,7 @@ async def node_run_ciso(state: GraphState) -> GraphState:
 
 
 async def node_run_critic(state: GraphState) -> GraphState:
+    logger.info("NODE ENTERED: critic")
     from agent.critic import CriticAgent
 
     task = state["task"]
@@ -127,6 +153,7 @@ async def node_run_critic(state: GraphState) -> GraphState:
 
 async def node_escalate_human(state: GraphState) -> GraphState:
     """Block the task and write an EscalationRow to Postgres."""
+    logger.info("NODE ENTERED: escalate_human")
     from database import async_session_maker
     from models.db import EscalationRow
     import uuid
@@ -161,6 +188,7 @@ async def node_escalate_human(state: GraphState) -> GraphState:
 
 
 async def node_deploy(state: GraphState) -> GraphState:
+    logger.info("NODE ENTERED: deploy")
     from agent.devops import DevOpsAgent
 
     task = state["task"]
@@ -172,6 +200,7 @@ async def node_deploy(state: GraphState) -> GraphState:
 
 async def node_write_memory(state: GraphState) -> GraphState:
     """Extract lessons from completed task and store in Qdrant + Postgres."""
+    logger.info("NODE ENTERED: write_memory")
     from database import async_session_maker
     from models.db import MemoryEntryRow
     from memory.long_term import store_memory
@@ -180,10 +209,15 @@ async def node_write_memory(state: GraphState) -> GraphState:
     from datetime import datetime
 
     task = state["task"]
+    await _set_status(state, TaskStatus.DEPLOYED, "Orchestrator")
     await _emit(state, "Writing lessons to long-term memory...")
 
     lessons: list[str] = []
 
+    # Successful lifecycle lessons
+    if task.status == TaskStatus.DEPLOYED:
+        lessons.append(f"Successfully implemented {task.title}: {task.description[:100]}...")
+    
     if task.qa_result and task.error_history:
         lessons.append(
             f"Task '{task.title}' needed {task.retry_count} retries. Root errors: {'; '.join(task.error_history[-3:])}"
@@ -200,9 +234,14 @@ async def node_write_memory(state: GraphState) -> GraphState:
         if root_cause:
             lessons.append(f"Root cause pattern: {root_cause}. Fix: {fix}")
 
-    tags = ["task-complete", task.repo.split("/")[-1]]
-    if task.qa_result:
-        tags.append("qa-passed")
+    if not lessons and task.status == TaskStatus.FAILED:
+        lessons.append(f"Task '{task.title}' failed. Last error: {task.last_error}")
+
+    tags = ["task-lifecycle", task.repo.split("/")[-1]]
+    if task.status == TaskStatus.DEPLOYED:
+        tags.append("success")
+    elif task.status == TaskStatus.FAILED:
+        tags.append("failure")
 
     for lesson in lessons:
         entry = MemoryEntry(
@@ -221,6 +260,7 @@ async def node_write_memory(state: GraphState) -> GraphState:
                 content=lesson,
                 tags=tags,
                 source_task_id=task.task_id,
+                created_at=datetime.utcnow()
             )
             session.add(row)
             await session.commit()
@@ -229,24 +269,132 @@ async def node_write_memory(state: GraphState) -> GraphState:
         state,
         f"{len(lessons)} lessons stored to memory",
         event_type="success",
+        payload={"count": len(lessons)}
     )
+    return state
+
+
+async def node_terminate(state: GraphState) -> GraphState:
+    """Final cleanup node for aborted or failed tasks."""
+    logger.info("NODE ENTERED: terminate")
+    task = state["task"]
+    
+    # If the task failed/aborted but we still want to capture lessons
+    if task.status in (TaskStatus.FAILED, TaskStatus.ESCALATED):
+        await node_write_memory(state)
+        
+    return state
+
+
+async def node_terminate(state: GraphState) -> GraphState:
+    """Final cleanup node for aborted or failed tasks."""
+    logger.info("NODE ENTERED: terminate")
+    task = state["task"]
+    
+    # If the task failed/aborted but we still want to capture lessons
+    if task.status in (TaskStatus.FAILED, TaskStatus.ESCALATED):
+        await node_write_memory(state)
+        
+    return state
+
+
+async def node_run_ceo(state: GraphState) -> GraphState:
+    logger.info("NODE ENTERED: ceo")
+    from agent.ceo import CEOAgent
+    task = state["task"]
+    await _set_status(state, TaskStatus.RUNNING, "CEO/Manager")
+    updated = await CEOAgent().run(task)
+    updated.ceo_approved = updated.ceo_output.approved if updated.ceo_output else True
+    state["task"] = updated
+    return state
+
+
+async def node_run_cto(state: GraphState) -> GraphState:
+    logger.info("NODE ENTERED: cto")
+    from agent.cto import CTOAgent
+    task = state["task"]
+    await _set_status(state, TaskStatus.RUNNING, "CEO/Manager")
+    updated = await CTOAgent().run(task)
+    state["task"] = updated
+    return state
+
+
+async def node_run_manager(state: GraphState) -> GraphState:
+    logger.info("NODE ENTERED: manager")
+    from agent.manager import ManagerAgent
+    task = state["task"]
+    await _set_status(state, TaskStatus.RUNNING, "CEO/Manager")
+    updated = await ManagerAgent().run(task)
+    state["task"] = updated
+    return state
+
+
+async def node_run_team_leader(state: GraphState) -> GraphState:
+    logger.info("NODE ENTERED: team_leader")
+    from agent.team_leader import TeamLeaderAgent
+    task = state["task"]
+    await _set_status(state, TaskStatus.RUNNING, "CEO/Manager")
+    updated = await TeamLeaderAgent().run(task)
+    state["task"] = updated
+    return state
+
+
+async def node_run_tl_review(state: GraphState) -> GraphState:
+    logger.info("NODE ENTERED: tl_review")
+    from agent.team_leader import TeamLeaderAgent
+    task = state["task"]
+    await _set_status(state, TaskStatus.RUNNING, "CEO/Manager")
+    updated = await TeamLeaderAgent().run_review(task)
+    state["task"] = updated
+    return state
+
+
+async def node_run_tl_final(state: GraphState) -> GraphState:
+    logger.info("NODE ENTERED: tl_final")
+    from agent.team_leader import TeamLeaderAgent
+    task = state["task"]
+    await _set_status(state, TaskStatus.RUNNING, "CEO/Manager")
+    updated = await TeamLeaderAgent().run_final(task)
+    state["task"] = updated
     return state
 
 
 _builder = StateGraph(GraphState)
 
-_builder.add_node("load_memory", node_load_memory)
-_builder.add_node("developer", node_run_developer)
-_builder.add_node("qa", node_run_qa)
-_builder.add_node("ciso", node_run_ciso)
-_builder.add_node("critic", node_run_critic)
+_builder.add_node("load_memory",  node_load_memory)
+_builder.add_node("ceo",          node_run_ceo)
+_builder.add_node("cto",          node_run_cto)
+_builder.add_node("manager",      node_run_manager)
+_builder.add_node("team_leader",  node_run_team_leader)
+_builder.add_node("tl_review",    node_run_tl_review)
+_builder.add_node("tl_final",     node_run_tl_final)
+_builder.add_node("qa_planner",   node_run_qa_planner)
+_builder.add_node("developer",    node_run_developer)
+_builder.add_node("qa",           node_run_qa)
+_builder.add_node("ciso",         node_run_ciso)
+_builder.add_node("critic",       node_run_critic)
 _builder.add_node("escalate_human", node_escalate_human)
-_builder.add_node("deploy", node_deploy)
+_builder.add_node("terminate",      node_terminate)
+_builder.add_node("deploy",       node_deploy)
 _builder.add_node("write_memory", node_write_memory)
 
 _builder.set_entry_point("load_memory")
-_builder.add_edge("load_memory", "developer")
-_builder.add_edge("developer", "qa")
+_builder.add_edge("load_memory",  "ceo")
+_builder.add_conditional_edges("ceo", route_after_ceo, {
+    "cto":            "cto",
+    "escalate_human": "escalate_human",
+})
+_builder.add_edge("cto",          "manager")
+_builder.add_edge("manager",      "team_leader")
+
+_builder.add_edge("team_leader",  "qa_planner")
+_builder.add_edge("qa_planner",   "developer")
+_builder.add_edge("developer",    "tl_review")
+_builder.add_conditional_edges("tl_review", route_after_tl_review, {
+    "qa":             "qa",
+    "developer":      "developer",
+    "escalate_human": "escalate_human",
+})
 
 _builder.add_conditional_edges(
     "qa",
@@ -272,12 +420,21 @@ _builder.add_conditional_edges(
     route_after_critic,
     {
         "developer": "developer",
+        "deploy": "deploy",
         "escalate_human": "escalate_human",
     },
 )
 
-_builder.add_edge("escalate_human", END)
-_builder.add_edge("deploy", "write_memory")
-_builder.add_edge("write_memory", END)
+# NOTE: no unconditional add_edge("critic", ...) here — that would conflict
+# with the conditional edges above and cause LangGraph to hang.
+_builder.add_edge("escalate_human", "terminate")
+_builder.add_edge("terminate",      END)
+_builder.add_edge("deploy",         "tl_final")
+_builder.add_conditional_edges("tl_final", route_after_tl_final, {
+    "write_memory":   "write_memory",
+    "developer":      "developer",
+    "escalate_human": "escalate_human",
+})
+_builder.add_edge("write_memory",   END)
 
 graph = _builder.compile()

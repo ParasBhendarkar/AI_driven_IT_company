@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 class CISOAgent(BaseAgent):
     role = "CISO"
+    model = "ollama/qwen2.5-coder:3b"
 
     async def run(self, state: TaskState) -> TaskState:
         await self._publish(state.task_id, "Running security scan...")

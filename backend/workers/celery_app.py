@@ -6,6 +6,7 @@ celery_app = Celery(
     "conductor",
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
+    include=["workers.task_worker"],
 )
 
 celery_app.conf.update(

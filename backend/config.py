@@ -61,8 +61,11 @@ class Settings(BaseSettings):
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
 
     # LLM / agent credentials
+    OPENAI_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
     GITHUB_TOKEN: str = ""
+    TL_REVIEW_MODEL: str = "ollama/qwen2.5-coder:1.5b"
+    DEV_RETRY_MODEL: str = "ollama/qwen2.5-coder:1.5b"
 
     model_config = SettingsConfigDict(
         env_file=".env",

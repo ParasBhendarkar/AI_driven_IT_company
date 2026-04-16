@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import re
 import uuid
 from datetime import datetime
@@ -8,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from database import async_session_maker
-from memory.short_term import save_state, get_state
+from memory.short_term import save_state, get_state, save_task_token
 from models.db import Task as TaskRow
 from models.schemas import TaskCreate, TaskState, TaskStatus, TaskListItem, Priority, AgentRole
 from workers.task_worker import run_task
@@ -70,6 +71,7 @@ async def create_task(data: TaskCreate, github_token: str) -> TaskState:
     )
 
     await save_state(state)
+    await save_task_token(task_id, github_token)
 
     async with async_session_maker() as session:
         row = TaskRow(
@@ -131,39 +133,56 @@ async def list_tasks() -> list[TaskListItem]:
         result = await session.execute(select(TaskRow).order_by(TaskRow.created_at.desc()).limit(50))
         rows = result.scalars().all()
 
+    # Prefer Redis state when available so Dashboard reflects live/most-recent status.
+    redis_states = await asyncio.gather(*(get_state(row.id) for row in rows))
+
     items = []
-    for row in rows:
-        status = TaskStatus(row.status)
+    for row, state in zip(rows, redis_states):
+        status = state.status if state else TaskStatus(row.status)
         items.append(
             TaskListItem(
                 id=row.id,
-                title=row.title,
+                title=state.title if state else row.title,
                 status=status,
-                priority=Priority(row.priority),
-                repo=row.repo,
-                branch=row.branch,
-                currentAgent=row.current_agent or "Orchestrator",
-                retryCount=row.retry_count,
-                maxRetries=row.max_retries,
+                priority=state.priority if state else Priority(row.priority),
+                repo=state.repo if state else row.repo,
+                branch=state.branch if state else row.branch,
+                currentAgent=str(getattr(state.current_agent, "value", state.current_agent))
+                if state
+                else (row.current_agent or "Orchestrator"),
+                retryCount=state.retry_count if state else row.retry_count,
+                maxRetries=state.max_retries if state else row.max_retries,
                 progress=_compute_progress(status),
                 timeElapsed=_time_elapsed(row.created_at),
-                prNumber=row.pr_number,
+                prNumber=(state.pr_number if state else row.pr_number),
             )
         )
     return items
 
 
 async def abort_task(task_id: str) -> None:
-    """Mark task as failed, update both Redis and Postgres."""
+    """Mark task as failed, update both Redis and Postgres, and resolve any escalations."""
     state = await get_state(task_id)
     if state:
         state.status = TaskStatus.FAILED
         state.last_error = "Aborted by founder"
         await save_state(state)
 
+    from models.db import EscalationRow
     async with async_session_maker() as session:
         result = await session.execute(select(TaskRow).where(TaskRow.id == task_id))
         row = result.scalar_one_or_none()
         if row:
             row.status = TaskStatus.FAILED.value
-            await session.commit()
+            
+        esc_result = await session.execute(
+            select(EscalationRow)
+            .where(EscalationRow.task_id == task_id)
+            .where(EscalationRow.resolved == False)
+        )
+        for esc in esc_result.scalars().all():
+            esc.resolved = True
+            esc.resolved_at = datetime.utcnow()
+            esc.human_override_text = "Aborted by founder"
+            
+        await session.commit()
