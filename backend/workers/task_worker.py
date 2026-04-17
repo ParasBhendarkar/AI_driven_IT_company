@@ -11,6 +11,22 @@ from models.events import AgentEvent
 logger = logging.getLogger(__name__)
 
 
+def _parse_sub_tasks(raw_sub_tasks):
+    from models.schemas import SubTask
+
+    if not raw_sub_tasks:
+        return []
+    return [SubTask.model_validate(sub_task) for sub_task in raw_sub_tasks]
+
+
+def _parse_pull_requests(raw_pull_requests):
+    from models.schemas import PullRequestSummary
+
+    if not raw_pull_requests:
+        return []
+    return [PullRequestSummary.model_validate(pr) for pr in raw_pull_requests]
+
+
 @celery_app.task(
     bind=True,
     max_retries=0,
@@ -52,7 +68,7 @@ async def _run_task_async(task_id: str) -> dict:
     except Exception as exc:
         logger.warning("Could not update started_at: %s", exc)
 
-    graph_state = {"task": state, "events": []}
+    graph_state = {"task": state, "events": [], "pull_requests": []}
 
     try:
         final_state = await graph.ainvoke(graph_state)
@@ -79,6 +95,9 @@ async def _run_task_async(task_id: str) -> dict:
                     completed_at=datetime.utcnow()
                     if final_task.status in (TaskStatus.DEPLOYED, TaskStatus.FAILED, TaskStatus.ESCALATED)
                     else None,
+                    pull_requests=[pr.model_dump() for pr in final_task.pull_requests]
+                    if final_task.pull_requests else None,
+                    merge_commit_hash=final_task.merge_commit_hash,
                 )
             )
             await session.commit()
@@ -134,7 +153,7 @@ async def _run_task_async(task_id: str) -> dict:
 async def _rebuild_state_from_postgres(task_id: str):
     from database import async_session_maker
     from models.db import Task as TaskRow
-    from models.schemas import Priority, TaskState
+    from models.schemas import Priority, TaskState, RequestType
     from sqlalchemy import select
 
     async with async_session_maker() as session:
@@ -159,4 +178,8 @@ async def _rebuild_state_from_postgres(task_id: str):
         progress=row.progress or 5,
         created_at=row.created_at,
         updated_at=row.updated_at,
+        request_type=RequestType(row.request_type) if row.request_type else RequestType.TASK,
+        tasks_to_build=_parse_sub_tasks(row.sub_tasks),
+        pull_requests=_parse_pull_requests(row.pull_requests),
+        merge_commit_hash=row.merge_commit_hash,
     )

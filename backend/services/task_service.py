@@ -11,7 +11,7 @@ from sqlalchemy import select
 from database import async_session_maker
 from memory.short_term import save_state, get_state, save_task_token
 from models.db import Task as TaskRow
-from models.schemas import TaskCreate, TaskState, TaskStatus, TaskListItem, Priority, AgentRole
+from models.schemas import TaskCreate, TaskState, TaskStatus, TaskListItem, Priority, AgentRole, RequestType, SubTask, PullRequestSummary
 from workers.task_worker import run_task
 
 
@@ -35,6 +35,8 @@ def _compute_progress(status: TaskStatus) -> int:
         TaskStatus.FAILED: 0,
         TaskStatus.ESCALATED: 30,
         TaskStatus.BLOCKED: 40,
+        TaskStatus.PARALLEL_DEV: 40,
+        TaskStatus.MERGING: 75,
     }
     return mapping.get(status, 0)
 
@@ -44,6 +46,18 @@ def _time_elapsed(created_at: datetime) -> str:
     total = int(delta.total_seconds())
     m, s = divmod(total, 60)
     return f"{m}m {s}s" if m else f"{s}s"
+
+
+def _parse_sub_tasks(raw_sub_tasks) -> list[SubTask]:
+    if not raw_sub_tasks:
+        return []
+    return [SubTask.model_validate(sub_task) for sub_task in raw_sub_tasks]
+
+
+def _parse_pull_requests(raw_pull_requests) -> list[PullRequestSummary]:
+    if not raw_pull_requests:
+        return []
+    return [PullRequestSummary.model_validate(pr) for pr in raw_pull_requests]
 
 
 async def create_task(data: TaskCreate, github_token: str) -> TaskState:
@@ -68,6 +82,7 @@ async def create_task(data: TaskCreate, github_token: str) -> TaskState:
         progress=5,
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
+        request_type=data.request_type,
     )
 
     await save_state(state)
@@ -88,6 +103,7 @@ async def create_task(data: TaskCreate, github_token: str) -> TaskState:
             retry_count=0,
             max_retries=5,
             progress=5,
+            request_type=data.request_type.value,
         )
         session.add(row)
         await session.commit()
@@ -124,6 +140,10 @@ async def get_task(task_id: str) -> TaskState | None:
         progress=_compute_progress(TaskStatus(row.status)),
         created_at=row.created_at,
         updated_at=row.updated_at,
+        request_type=RequestType(row.request_type) if row.request_type else RequestType.TASK,
+        tasks_to_build=_parse_sub_tasks(row.sub_tasks),
+        pull_requests=_parse_pull_requests(row.pull_requests),
+        merge_commit_hash=row.merge_commit_hash,
     )
 
 

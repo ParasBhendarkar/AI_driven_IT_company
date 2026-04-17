@@ -23,6 +23,8 @@ const statusConfig: Record<TaskStatus, { label: string; color: string }> = {
   blocked: { label: 'Blocked', color: 'text-orange-400 bg-orange-400/15' },
   escalated: { label: 'Escalated', color: 'text-red-400 bg-red-400/15' },
   deployed: { label: 'Deployed', color: 'text-green-400 bg-green-400/15' },
+  parallel_dev: { label: 'Parallel Dev', color: 'text-fuchsia-400 bg-fuchsia-400/15' },
+  merging: { label: 'Merging', color: 'text-violet-400 bg-violet-400/15' },
   failed: { label: 'Failed', color: 'text-red-500 bg-red-500/15' },
 };
 

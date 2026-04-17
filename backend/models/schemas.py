@@ -17,6 +17,8 @@ class TaskStatus(str, Enum):
     ESCALATED = "escalated"
     FAILED = "failed"
     BLOCKED = "blocked"
+    PARALLEL_DEV = "parallel_dev"
+    MERGING = "merging"
 
 
 class Priority(str, Enum):
@@ -24,6 +26,11 @@ class Priority(str, Enum):
     MEDIUM = "Medium"
     HIGH = "High"
     CRITICAL = "Critical"
+ 
+ 
+class RequestType(str, Enum):
+    TASK = "task"
+    MODULE = "module"
 
 
 class Severity(str, Enum):
@@ -107,6 +114,7 @@ class TaskCreate(BaseModel):
     priority: Priority = Priority.MEDIUM
     acceptance_criteria: list[str] = Field(default_factory=list)
     context_refs: list[str] = Field(default_factory=list)
+    request_type: RequestType = RequestType.TASK
 
 
 class FileChange(BaseModel):
@@ -116,6 +124,30 @@ class FileChange(BaseModel):
     change_type: str
     summary: str
     patch: str | None = None
+ 
+ 
+class SubTask(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+ 
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    title: str
+    description: str
+    file_targets: list[str] = Field(default_factory=list)
+    branch: str  # feature/<slug> assigned by Manager
+    acceptance_criteria: list[str] = Field(default_factory=list)
+    pr_number: int | None = None
+    commit_hash: str | None = None
+    status: str = "pending"  # pending | running | done | failed
+ 
+ 
+class PullRequestSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+ 
+    pr_number: int
+    branch: str
+    title: str
+    status: str = "open"  # open | merged | failed
+    sub_task_id: str | None = None
 
 
 class DevOutput(BaseModel):
@@ -223,6 +255,7 @@ class ManagerOutput(BaseModel):
     acceptance_criteria: list[str] = Field(default_factory=list)
     risks: str = ""
     coordination_notes: str = ""
+    sub_tasks: list[SubTask] = Field(default_factory=list)
 
 
 class TeamLeaderOutput(BaseModel):
@@ -281,6 +314,11 @@ class TaskState(BaseModel):
     tl_final_count: int = 0
     tl_final_feedback: str = ""
     ceo_approved: bool = True
+    request_type: RequestType = Field(default=RequestType.TASK)
+    tasks_to_build: list[SubTask] = Field(default_factory=list)
+    pull_requests: list[PullRequestSummary] = Field(default_factory=list)
+    merge_commit_hash: str | None = Field(default=None)
+    current_sub_task_id: str | None = Field(default=None)
 
 
 class TaskResponse(BaseModel):

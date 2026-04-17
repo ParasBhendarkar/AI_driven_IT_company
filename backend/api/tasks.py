@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
 from memory.short_term import subscribe_events
-from models.schemas import TaskCreate, TaskState, TaskListItem, OverrideRequest
+from models.schemas import TaskCreate, TaskState, TaskListItem, OverrideRequest, RequestType
 from services.auth_service import extract_bearer_token
 from services.task_service import create_task, get_task, list_tasks, abort_task
 

@@ -1,159 +1,154 @@
 from __future__ import annotations
-
+ 
 import json
 import logging
 import time
-
+ 
 from agent.base import BaseAgent
-from models.schemas import TaskState, TaskStatus
-
+from models.schemas import TaskState
+ 
 logger = logging.getLogger(__name__)
-
-QA_PLANNER_SYSTEM_PROMPT = """
-You are the Senior QA Automation Engineer in an autonomous AI-driven software company.
-Your role is to write the automated test suite BEFORE the Developer writes the application code (Test-Driven Development).
-
-INPUTS YOU WILL RECEIVE:
-1. The Founder's original request.
-2. The CTO's architectural decisions.
-3. The Team Leader's Enriched Brief with Acceptance Criteria.
-
-YOUR CRITICAL INSTRUCTIONS:
-1. Write a comprehensive `pytest` suite that covers every Acceptance Criterion.
-2. Include tests for the "Happy Path", "Edge Cases", and "Failure Modes" (using pytest.raises).
-3. Include all necessary imports at the top of the file (e.g., `import pytest`).
-4. CRITICAL HANDOFF: You must use the `create_or_update_file` tool to save your generated test code to the repository (e.g., to `test_calculator.py`). 
-5. The `QA Runner` agent will execute the file you save here after the Developer finishes their work. Ensure the file is completely ready to run.
-"""
-
+ 
+ 
 class QAPlannerAgent(BaseAgent):
+    """
+    Task-path entry agent. Analyses the task description and acceptance
+    criteria and writes a structured TDD test plan into state.
+    The Developer agent reads this plan and writes code to make it pass.
+    """
     role = "QA Planner"
     model = "ollama/qwen2.5-coder:3b"
-
+ 
+    SYSTEM_PROMPT = """
+You are a QA Planner agent in an autonomous AI development company.
+You receive a task description and acceptance criteria.
+Your job is to write a concrete TDD test plan that a Developer agent will implement.
+ 
+Respond ONLY with valid JSON — no prose, no markdown:
+{
+  "test_plan": [
+    {
+      "test_name": "test_<specific_function_or_behaviour>",
+      "test_file": "tests/test_<module>.py",
+      "description": "one sentence: what this test verifies",
+      "assertion": "exact assertion or behaviour to check"
+    }
+  ],
+  "files_to_modify": ["exact/file/path.py"],
+  "implementation_hint": "brief guidance on what the developer needs to implement"
+}
+ 
+Rules:
+- Every test must be pytest-compatible.
+- test_name must be a valid Python identifier starting with test_.
+- files_to_modify must use real paths from the repo structure if known.
+- If repo structure is unknown, use conventional paths (src/, tests/).
+- implementation_hint must be specific — not "implement the feature".
+"""
+ 
     async def run(self, state: TaskState) -> TaskState:
         logger.info("NODE ENTERED: qa_planner")
         start = time.time()
-
+ 
         try:
-            await self._publish(state.task_id, "Planning and writing QA tests via TDD...")
-
-            messages = [{"role": "user", "content": self._build_prompt(state)}]
-            
-            tools = [
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "create_or_update_file",
-                        "description": "Save generated code to the repository",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "file_path": {
-                                    "type": "string",
-                                    "description": "The path to the file, e.g., tests/test_feature.py"
-                                },
-                                "content": {
-                                    "type": "string",
-                                    "description": "The complete file content"
-                                },
-                                "summary": {
-                                    "type": "string",
-                                    "description": "Brief summary of changes"
-                                }
-                            },
-                            "required": ["file_path", "content"]
-                        }
-                    }
-                }
-            ]
-
+            await self._publish(state.task_id, "Generating TDD test plan...")
+ 
+            prompt = self._build_prompt(state)
+            messages = [{"role": "user", "content": prompt}]
+ 
             response = await self._call_llm(
                 messages=messages,
-                system=QA_PLANNER_SYSTEM_PROMPT,
-                tools=tools,
+                system=self.SYSTEM_PROMPT,
                 temperature=0.1,
-                max_tokens=4096,
+                max_tokens=1500,
             )
-
+ 
             if response is None:
-                logger.warning("QAPlannerAgent LLM call failed or timed out.")
+                logger.warning("QAPlanner _call_llm returned None, using passthrough")
                 return state
-
-            tokens = response.usage.total_tokens if response.usage else 0
+ 
+            content = response.choices[0].message.content or ""
             latency = time.time() - start
-
-            message = response.choices[0].message
-            files_saved = 0
-
-            if hasattr(message, 'tool_calls') and message.tool_calls:
-                for tool_call in message.tool_calls:
-                    if tool_call.function.name == "create_or_update_file":
-                        try:
-                            args = json.loads(tool_call.function.arguments)
-                            path = args.get("file_path")
-                            content = args.get("content")
-                            
-                            if path and content:
-                                if not hasattr(state, "reviewed_file_contents") or state.reviewed_file_contents is None:
-                                    state.reviewed_file_contents = {}
-                                state.reviewed_file_contents[path] = content
-                                files_saved += 1
-                                await self._publish(
-                                    state.task_id,
-                                    f"Wrote tests to {path}",
-                                    payload={"path": path}
-                                )
-                        except json.JSONDecodeError:
-                            logger.error("Failed to parse tool arguments")
-
-            if files_saved == 0 and message.content:
-                content = message.content
-                import re
-                blocks = re.findall(r"```python\n(.*?)\n```", content, re.DOTALL)
-                if blocks:
-                    path = "tests/test_feature.py"
-                    if not hasattr(state, "reviewed_file_contents") or state.reviewed_file_contents is None:
-                        state.reviewed_file_contents = {}
-                    state.reviewed_file_contents[path] = blocks[0]
-                    files_saved += 1
-                    await self._publish(state.task_id, f"Wrote fallback tests to {path}")
-
+            tokens = response.usage.total_tokens if response.usage else 0
+ 
+            plan = _parse_plan(content)
+ 
+            # Inject the test plan into state.description so Developer reads it.
+            if plan:
+                enriched = (
+                    f"{state.description}\n\n"
+                    f"--- TDD TEST PLAN (implement code to satisfy these tests) ---\n"
+                    f"Files to modify: {', '.join(plan.get('files_to_modify', []))}\n"
+                    f"Implementation hint: {plan.get('implementation_hint', '')}\n\n"
+                    f"Tests that must pass:\n"
+                )
+                for t in plan.get("test_plan", []):
+                    enriched += (
+                        f"  [{t['test_file']}::{t['test_name']}] "
+                        f"{t['description']} — assert: {t['assertion']}\n"
+                    )
+                state.description = enriched
+ 
+                # Inject file targets into team_leader_output.file_targets so
+                # Developer._extract_paths picks them up correctly.
+                if state.team_leader_output is None:
+                    from models.schemas import TeamLeaderOutput
+                    state.team_leader_output = TeamLeaderOutput(
+                        tickets=["T1: Implement code to satisfy the TDD test plan"],
+                        enriched_description=enriched,
+                        enriched_acceptance_criteria=state.acceptance_criteria,
+                        file_targets=plan.get("files_to_modify", []),
+                    )
+                else:
+                    state.team_leader_output.file_targets = plan.get("files_to_modify", [])
+ 
+            await self._publish(
+                state.task_id,
+                f"TDD test plan ready — {len(plan.get('test_plan', []))} tests planned",
+                event_type="success",
+            )
             await self._log_call(
                 task_id=state.task_id,
-                action="qa_planner",
-                input_payload={"prompt": "TDD Planning"},
-                output_payload={"files": files_saved},
+                action="qa_planner_run",
+                input_payload={"acceptance_criteria": state.acceptance_criteria},
+                output_payload=plan,
                 tokens_used=tokens,
                 latency_seconds=latency,
             )
-
-            await self._publish(
-                state.task_id,
-                f"QA Planner completed ({files_saved} test files created)",
-                event_type="success",
-            )
             return state
-
+ 
         except Exception as exc:
             logger.error(f"QAPlanner run() crashed: {exc}")
-            state.last_error = str(exc)
-            await self._publish(
-                state.task_id,
-                f"QA Planner failed: {exc}",
-                event_type="error",
-            )
             return state
-
+ 
     def _build_prompt(self, state: TaskState) -> str:
         lines = [
-            f"Original Request: {state.description}",
+            f"Task: {state.title}",
+            f"Description: {state.description}",
+            f"Repo: {state.repo}",
             "",
-            "Architectural Decisions (CTO):",
-            getattr(state.cto_output, "architecture", "None provided") if state.cto_output else "None provided",
-            "",
-            "Enriched Brief with Acceptance Criteria (Team Leader):",
+            "Acceptance criteria:",
         ]
-        for ac in state.acceptance_criteria or []:
-            lines.append(f"- {ac}")
-            
+        for c in state.acceptance_criteria:
+            lines.append(f"  - {c}")
+        lines.append("")
+        lines.append("Write the TDD test plan.")
         return "\n".join(lines)
+ 
+ 
+def _parse_plan(content: str) -> dict:
+    clean = content.strip()
+    if clean.startswith("```"):
+        clean = clean.split("```")[1]
+        if clean.startswith("json"):
+            clean = clean[4:]
+        clean = clean.strip()
+    start = clean.find("{")
+    end = clean.rfind("}")
+    if start != -1 and end != -1:
+        clean = clean[start:end + 1]
+    try:
+        return json.loads(clean)
+    except Exception as exc:
+        logger.warning("QAPlanner JSON parse failed: %s", exc)
+        return {}

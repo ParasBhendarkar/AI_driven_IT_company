@@ -19,6 +19,7 @@ export interface TaskFormData {
   repo: string;
   branch: string;
   priority: 'Low' | 'Medium' | 'High' | 'Critical';
+  request_type: 'task' | 'module';
   acceptance_criteria: string[];
   context_refs: string[];
 }
@@ -29,6 +30,7 @@ const INITIAL_FORM_DATA: TaskFormData = {
   repo: '',
   branch: '',
   priority: 'Medium',
+  request_type: 'task',
   acceptance_criteria: [''],
   context_refs: [],
 };
@@ -53,6 +55,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [requestType, setRequestType] = useState<'task' | 'module'>('task');
 
   const selectedRepository = useMemo(
     () => repositories.find((repository) => repository.full_name === formData.repo),
@@ -145,6 +148,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({
 
   const resetForm = () => {
     setFormData(INITIAL_FORM_DATA);
+    setRequestType('task');
     setErrors({});
     setSubmitError(null);
     setIsSubmitting(false);
@@ -183,6 +187,7 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({
 
     const cleanedData = {
       ...formData,
+      request_type: requestType,
       title: formData.title.trim(),
       description: formData.description.trim(),
       acceptance_criteria: formData.acceptance_criteria
@@ -212,7 +217,9 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
         <div className="flex items-center justify-between p-6 border-b border-[#2A2A2A]">
-          <h2 className="text-xl font-semibold text-[#F5F5F5]">Create New Task</h2>
+          <h2 className="text-xl font-semibold text-[#F5F5F5]">
+            {requestType === 'module' ? 'Create New Module' : 'Create New Task'}
+          </h2>
           <button
             onClick={handleClose}
             className="text-[#5A5A5A] hover:text-[#F5F5F5] transition-colors"
@@ -227,6 +234,44 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({
           onSubmit={handleSubmit}
           className="flex-1 overflow-y-auto p-6 space-y-6"
         >
+          {/* Request type toggle */}
+          <div className="flex items-center gap-1 p-1 bg-[#0F0F0F] border border-[#2A2A2A] rounded-xl w-fit">
+            <button
+              type="button"
+              onClick={() => {
+                setRequestType('task');
+                setFormData((prev) => ({ ...prev, request_type: 'task' }));
+              }}
+              className={cn(
+                'px-5 py-2 rounded-lg text-sm font-medium transition-all',
+                requestType === 'task'
+                  ? 'bg-indigo-600 text-white shadow'
+                  : 'text-[#A0A0A0] hover:text-[#F5F5F5]',
+              )}
+            >
+              Create Task
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setRequestType('module');
+                setFormData((prev) => ({ ...prev, request_type: 'module' }));
+              }}
+              className={cn(
+                'px-5 py-2 rounded-lg text-sm font-medium transition-all',
+                requestType === 'module'
+                  ? 'bg-violet-600 text-white shadow'
+                  : 'text-[#A0A0A0] hover:text-[#F5F5F5]',
+              )}
+            >
+              Create Module
+            </button>
+          </div>
+          <p className="text-xs text-[#5A5A5A] -mt-2">
+            {requestType === 'task'
+              ? 'Task: single bug fix or file edit — goes straight to Developer in TDD loop.'
+              : 'Module: high-level business feature — runs CEO -> CTO -> Manager -> parallel Developers.'}
+          </p>
           {githubError && (
             <div className="flex items-start gap-3 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
               <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
@@ -339,7 +384,8 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({
             <div className="space-y-2">
               <label className="text-sm font-medium text-[#F5F5F5] flex items-center gap-2">
                 <GitBranch className="w-4 h-4" />
-                Branch <span className="text-red-400">*</span>
+                {requestType === 'module' ? 'Merge target branch' : 'Branch'}
+                <span className="text-red-400">*</span>
               </label>
               {isLoadingSelectedBranches ? (
                 <div className="w-full bg-[#0F0F0F] border border-[#2A2A2A] rounded-lg px-4 py-3 flex items-center gap-2 text-[#5A5A5A]">
@@ -405,6 +451,8 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({
               ))}
             </div>
           </div>
+ 
+
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -466,10 +514,13 @@ export const TaskCreateModal: React.FC<TaskCreateModalProps> = ({
             disabled={isSubmitting}
             className="px-6 py-2.5 rounded-lg text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed transition-all shadow-lg shadow-indigo-500/20"
           >
-            {isSubmitting ? 'Creating...' : 'Create Task'}
+            {isSubmitting
+              ? (requestType === 'module' ? 'Creating Module...' : 'Creating Task...')
+              : (requestType === 'module' ? 'Create Module' : 'Create Task')}
           </button>
         </div>
       </div>
     </div>
   );
 };
+

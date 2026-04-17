@@ -150,6 +150,33 @@ class GitHubTool:
             "base": base_branch,
             "head": self.branch,
         }
+ 
+    async def merge_pull_request(self, pr_number: int, commit_message: str | None = None) -> str:
+        try:
+            pr = await asyncio.to_thread(self.repo.get_pull, pr_number)
+            merge_status = await asyncio.to_thread(
+                pr.merge,
+                commit_message=commit_message or f"Merge PR #{pr_number}",
+                merge_method="merge",
+            )
+            if not merge_status.merged:
+                raise HTTPException(status_code=500, detail=f"GitHub reported PR #{pr_number} was not merged")
+            return merge_status.sha
+        except GithubException as exc:
+            raise self._github_http_exception(exc, default_detail=f"Failed to merge PR #{pr_number}")
+
+    async def delete_branch(self, branch_name: str) -> None:
+        ref = f"heads/{branch_name}"
+        try:
+            git_ref = await asyncio.to_thread(self.repo.get_git_ref, ref)
+            await asyncio.to_thread(git_ref.delete)
+        except UnknownObjectException:
+            return
+        except GithubException as exc:
+            raise self._github_http_exception(
+                exc,
+                default_detail=f"Failed to delete branch '{branch_name}'",
+            ) from exc
 
     def _github_http_exception(self, exc: GithubException, default_detail: str) -> HTTPException:
         detail = default_detail

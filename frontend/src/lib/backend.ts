@@ -1,6 +1,6 @@
 import { useAuthStore } from '../store/authStore';
 import type { AgentRole } from '../types/agent';
-import type { Task, TaskEvent, QAResult, MemoryEntry, Escalation, Priority } from '../types/task';
+import type { Task, TaskEvent, QAResult, MemoryEntry, Escalation, Priority, RequestType } from '../types/task';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
 
@@ -19,6 +19,10 @@ const toCamelTask = (task: any): Task => ({
   repo: task.repo,
   branch: task.branch,
   commitHash: task.commitHash ?? task.commit_hash ?? '',
+  requestType: (task.requestType ?? task.request_type ?? 'task') as RequestType,
+  tasksToBuild: task.tasksToBuild ?? task.tasks_to_build ?? [],
+  pullRequests: task.pullRequests ?? task.pull_requests ?? [],
+  mergeCommitHash: task.mergeCommitHash ?? task.merge_commit_hash ?? undefined,
 });
 
 export const apiUrl = (path: string) => `${BACKEND_URL}${path}`;

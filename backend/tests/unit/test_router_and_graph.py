@@ -3,7 +3,7 @@ import importlib
 import pytest
 
 core_graph = importlib.import_module("core.graph")
-from core.router import route_after_critic
+from core.router import route_after_critic, route_by_request_type
 from models.schemas import (
     CEOOutput,
     CISOGate,
@@ -12,10 +12,43 @@ from models.schemas import (
     DevOutput,
     ManagerOutput,
     QAResult,
+    RequestType,
     TaskState,
     TeamLeaderOutput,
     TestCounts,
 )
+
+
+def test_route_by_request_type_task():
+    state = {
+        "task": TaskState(
+            title="Task",
+            description="Desc",
+            repo="owner/repo",
+            branch="main",
+            request_type=RequestType.TASK,
+        ),
+        "events": [],
+        "pull_requests": [],
+    }
+
+    assert route_by_request_type(state) == "qa_planner"
+
+
+def test_route_by_request_type_module():
+    state = {
+        "task": TaskState(
+            title="Task",
+            description="Desc",
+            repo="owner/repo",
+            branch="main",
+            request_type=RequestType.MODULE,
+        ),
+        "events": [],
+        "pull_requests": [],
+    }
+
+    assert route_by_request_type(state) == "load_memory"
 
 
 def test_route_after_critic_returns_deploy_when_approved():

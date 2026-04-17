@@ -16,8 +16,28 @@ export type TaskStatus =
   | 'blocked'
   | 'escalated'
   | 'deployed'
+  | 'parallel_dev'
+  | 'merging'
   | 'failed';
 export type Priority = 'Low' | 'Medium' | 'High' | 'Critical';
+export type RequestType = 'task' | 'module';
+ 
+export interface SubTask {
+  id: string;
+  title: string;
+  description: string;
+  branch: string;
+  status: 'pending' | 'running' | 'done' | 'failed';
+  pr_number?: number;
+}
+ 
+export interface PullRequestSummary {
+  pr_number: number;
+  branch: string;
+  title: string;
+  status: 'open' | 'merged' | 'failed';
+  sub_task_id?: string;
+}
 
 export interface Task {
   id: string;
@@ -34,6 +54,10 @@ export interface Task {
   repo: string;
   branch: string;
   commitHash: string;
+  requestType?: RequestType;
+  tasksToBuild?: SubTask[];
+  pullRequests?: PullRequestSummary[];
+  mergeCommitHash?: string;
 }
 
 export interface TaskEvent {

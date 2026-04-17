@@ -24,10 +24,10 @@ class DeveloperAgent(BaseAgent):
 
     SYSTEM_PROMPT = """
 You are an expert software developer agent inside an autonomous AI company system.
-
+ 
 You receive a task description, acceptance criteria, the base branch, the working
 branch, and the current contents of relevant repository files.
-
+ 
 Return ONLY valid JSON in this exact shape:
 {
   "commit_message": "short git commit message",
@@ -41,8 +41,10 @@ Return ONLY valid JSON in this exact shape:
     }
   ]
 }
-
+ 
 Rules:
+- BRANCH ISOLATION: You are working on branch {branch}. This branch already exists — the orchestrator created it before calling you. Do NOT create new branches. All commits go to {branch} only.
+- If you are given a TDD test plan (lines starting with "--- TDD TEST PLAN"), your primary goal is to write code that makes those specific tests pass. Write the test files first if they do not exist, then write the implementation.
 - Modify only files relevant to the task.
 - Return full file contents for every changed file as plain UTF-8 in content.
 - KEEP IMPORTS INTACT: If you use a new library (like math or json), you MUST include the import statement at the top of the file.
@@ -74,9 +76,11 @@ Rules:
             file_context = await self._read_file_context(gh, state)
             messages = [{"role": "user", "content": self._build_prompt(state, base_branch, work_branch, file_context)}]
 
+            system_with_branch = self.SYSTEM_PROMPT.replace("{branch}", work_branch)
+ 
             response = await self._call_llm(
                 messages=messages,
-                system=self.SYSTEM_PROMPT,
+                system=system_with_branch,
                 temperature=0.1,
                 max_tokens=4096,
                 timeout_seconds=240,
@@ -98,7 +102,7 @@ Rules:
                 response = await self._call_llm_with_model(
                     model=self.retry_model,
                     messages=compact_messages,
-                    system=self.SYSTEM_PROMPT,
+                    system=system_with_branch,
                     temperature=0.0,
                     max_tokens=2048,
                     timeout_seconds=180,
@@ -106,6 +110,7 @@ Rules:
                 )
                 if response is not None and response.usage:
                     tokens_total += response.usage.total_tokens
+
 
             if response is None:
                 state.last_error = "Developer model timed out"
@@ -167,20 +172,47 @@ Rules:
 
             state.reviewed_file_contents = reviewed_file_contents
 
-            summary = f"Generated {len(file_changes)} file(s) for review"
+            if not file_changes:
+                raise RuntimeError("Developer produced no material file changes")
+
+            commit_message = plan.get("commit_message") or f"feat: update {state.title}"
+            pr_title = plan.get("pr_title") or f"Implement {state.title}"
+            pr_body = plan.get("pr_body") or f"Automated implementation for task: {state.title}"
+
+            for change in file_changes:
+                content = reviewed_file_contents[change.file_path]
+                write_result = await gh.create_or_update_file(
+                    path=change.file_path,
+                    content=content,
+                    message=commit_message,
+                )
+                commit_sha = write_result.get("commit_sha") or commit_sha
+                await self._publish(
+                    state.task_id,
+                    f"Committed {change.file_path} to {work_branch}",
+                    payload={"path": change.file_path, "commit_sha": write_result.get("commit_sha")},
+                )
+
+            pr_result = await gh.open_pull_request(
+                title=pr_title,
+                body=pr_body,
+                base=base_branch,
+            )
+
+            summary = f"Generated {len(file_changes)} file(s), committed changes, and opened PR #{pr_result['number']}"
 
             state.dev_output = DevOutput(
                 summary=summary,
                 branch=work_branch,
-                commit_hash=None,
-                pr_number=None,
-                commit_message=plan.get("commit_message"),
-                pr_title=plan.get("pr_title"),
-                pr_body=plan.get("pr_body"),
+                commit_hash=commit_sha,
+                pr_number=pr_result["number"],
+                commit_message=commit_message,
+                pr_title=pr_title,
+                pr_body=pr_body,
                 files_changed=file_changes,
             )
-            state.pr_number = None
-            state.commit_hash = None
+            state.pr_number = pr_result["number"]
+            state.commit_hash = commit_sha
 
             latency = time.time() - start
 
@@ -188,7 +220,11 @@ Rules:
                 task_id=state.task_id,
                 action="developer_run",
                 input_payload={"prompt_length": len(messages[0]["content"])},
-                output_payload={"files_changed": len(file_changes)},
+                output_payload={
+                    "files_changed": len(file_changes),
+                    "commit_hash": commit_sha,
+                    "pr_number": pr_result["number"],
+                },
                 tokens_used=tokens_total,
                 latency_seconds=latency,
             )
@@ -197,6 +233,7 @@ Rules:
                 state.task_id,
                 summary,
                 event_type="success",
+                payload={"pr_number": pr_result["number"], "commit_hash": commit_sha},
             )
 
             return state
@@ -662,5 +699,6 @@ Return exactly this schema and nothing else:
                 return base64.b64decode(content_b64).decode("utf-8")
             except Exception:
                 logger.warning("Invalid content_b64 payload for path %s", file_item.get("path"))
-        return file_item.get("content", "")
+        # Fallback: plain UTF-8 content key (preferred for lightweight models)
+        return str(file_item.get("content", ""))
 

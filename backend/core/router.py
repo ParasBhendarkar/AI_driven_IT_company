@@ -135,3 +135,38 @@ def route_after_tl_final(state) -> str:
 
     logger.info("EDGE ROUTING from tl_final: returning 'developer' (rejected, retrying)")
     return "developer"
+ 
+ 
+def route_by_request_type(state) -> str:
+    """
+    Entry router: splits 'module' vs 'task' path.
+    'module' -> load_memory (then CEO chain)
+    'task'   -> qa_planner (bypasses C-suite)
+    """
+    from models.schemas import RequestType
+    task = state["task"]
+    rt = getattr(task, "request_type", None)
+    if rt == RequestType.MODULE or rt == "module":
+        logger.info("EDGE ROUTING from route_request: 'module' -> load_memory")
+        return "load_memory"
+    logger.info("EDGE ROUTING from route_request: 'task' -> qa_planner")
+    return "qa_planner"
+ 
+ 
+def route_after_tech_lead_merge(state) -> str:
+    """
+    After merge, always proceed to QA.
+    If merge failed (no merge_commit_hash), escalate.
+    """
+    task = state["task"]
+    if not task.merge_commit_hash:
+        logger.info("EDGE ROUTING from tech_lead_merge: 'escalate_human' (merge failed)")
+        return "escalate_human"
+    logger.info("EDGE ROUTING from tech_lead_merge: 'qa'")
+    return "qa"
+ 
+ 
+def route_after_qa_planner(state) -> str:
+    """Task path router after planner. Always proceeds to Developer."""
+    logger.info("EDGE ROUTING: route_after_qa_planner -> developer")
+    return "developer"
